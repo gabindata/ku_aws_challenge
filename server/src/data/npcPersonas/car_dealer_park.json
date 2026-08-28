@@ -1,0 +1,12 @@
+{
+  "id": "car_dealer_park",
+  "stageId": 2,
+  "difficulty": "normal",
+  "name": "박딜러",
+  "tone": "TODO(기획): 붙임성 좋고 말이 빠른 반존대",
+  "goal": { "item": "TODO(기획): 중고 세단", "floorPrice": 0, "targetPrice": 0 },
+  "resistancePoints": [
+    "TODO(기획): 가격+옵션 두 축을 동시에 협상해야 함 — 한쪽만 파고들면 다른 쪽을 올림"
+  ],
+  "successCriteria": "TODO(기획): 예) 최종가가 floorPrice 이상이고 trust >= 45"
+}

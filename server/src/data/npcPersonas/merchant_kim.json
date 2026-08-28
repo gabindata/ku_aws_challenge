@@ -1,0 +1,13 @@
+{
+  "id": "merchant_kim",
+  "stageId": 1,
+  "difficulty": "easy",
+  "name": "김상인",
+  "tone": "무뚝뚝하지만 정중한 존댓말",
+  "goal": { "item": "골동품 화병", "floorPrice": 80000, "targetPrice": 120000 },
+  "resistancePoints": [
+    "가격을 세 번 이상 깎으려 하면 방어적으로 변함",
+    "반말을 쓰면 신뢰도가 즉시 하락함"
+  ],
+  "successCriteria": "최종가가 floorPrice 이상이고 trust >= 40"
+}

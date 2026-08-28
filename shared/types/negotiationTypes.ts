@@ -1,0 +1,52 @@
+// 설계 문서 5장 API 계약. 프론트/백엔드가 이 파일을 단일 소스로 공유한다.
+
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/** 협상 진행 단계. LLM이 매 턴 갱신해서 돌려준다. */
+export type NegotiationStage = 'opening' | 'bargaining' | 'closing' | 'broken';
+
+export type Speaker = 'player' | 'npc';
+
+/** 세션에 누적되는 대화 로그 1줄. 판정과 스타일 분석 양쪽에서 재사용된다. */
+export interface Turn {
+  speaker: Speaker;
+  text: string;
+  timestampMs: number;
+}
+
+/** 매 턴 갱신되는 구조화된 협상 상태. 게임 로직은 이 값만 보고 판단한다. */
+export interface NegotiationState {
+  stage: NegotiationStage;
+  /** 0~100 */
+  trust: number;
+  /** NPC 목표가와 현재 제시가의 차이(원). 0에 가까울수록 타결에 가깝다. */
+  priceGap: number;
+  dealClosed: boolean;
+}
+
+// GET /api/stages
+export interface StageSummary {
+  stageId: number;
+  npcId: string;
+  name: string;
+  difficulty: Difficulty;
+}
+export type StagesResponse = StageSummary[];
+
+// POST /api/negotiation/start
+export interface StartRequest {
+  npcId: string;
+}
+export interface StartResponse extends NegotiationState {
+  sessionId: string;
+  npcReply: string;
+}
+
+// POST /api/negotiation/turn
+export interface TurnRequest {
+  sessionId: string;
+  playerText: string;
+}
+export interface TurnResponse extends NegotiationState {
+  npcReply: string;
+}

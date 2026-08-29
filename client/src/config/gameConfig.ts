@@ -9,12 +9,14 @@ import { StyleReportScene } from '../scenes/StyleReportScene';
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game',
-  width: 1280,
-  height: 720,
+  width: 1920,
+  height: 1080,
   backgroundColor: '#1a1a24',
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 1920,
+    height: 1080,
   },
   scene: [
     BootScene,

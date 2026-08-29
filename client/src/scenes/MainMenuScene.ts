@@ -24,17 +24,17 @@ export class MainMenuScene extends Phaser.Scene {
     background.setDisplaySize(width, height);
 
     // 튜토리얼 버튼
-    this.createMenuButton(width / 2, 700, '튜토리얼', () => {
+    this.createMenuButton(width / 2, 630, '튜토리얼', () => {
       console.log('튜토리얼 클릭');
     });
 
     // 시작하기 버튼
-    this.createMenuButton(width / 2, 810, '시작하기', () => {
+    this.createMenuButton(width / 2, 750, '시작하기', () => {
       console.log('시작하기 클릭');
     });
 
     // 설정 버튼
-    this.createMenuButton(width / 2, 920, '설정', () => {
+    this.createMenuButton(width / 2, 870, '설정', () => {
       console.log('설정 클릭');
     });
   }
@@ -54,8 +54,8 @@ export class MainMenuScene extends Phaser.Scene {
     .text(x, y, text, {
       fontSize: '36px',
       color: '#ffffff',
-      fontFamily: 'Arial, sans-serif',
-
+      fontFamily: 'YPairing',
+      fontStyle: 'bold',
       letterSpacing: 20,
 
       padding: {
@@ -64,21 +64,26 @@ export class MainMenuScene extends Phaser.Scene {
       },
     })
     .setOrigin(0.5); 
-
+    
+    //마우스를 버튼 위에 올렸을 때
     button.on('pointerover', () => {
       button.setTexture('button-highlight');
+      this.sound.play('button-hover');
     });
     
+    //마우스 버튼 밖
     button.on('pointerout', () => {
       button.setTexture('button-default');
     });
     
+    //버튼 누르는 순간
     button.on('pointerdown', () => {
       button.setTexture('button-highlight');
       this.sound.play('button-click');
       onClick();
     });
     
+    //버튼에서 손을 뗐을 때
     button.on('pointerup', () => {
       button.setTexture('button-default');
     });

@@ -92,7 +92,9 @@ NPC 성격·목표·말투는 코드가 아니라 JSON 페르소나 파일로 �
 
 ### 협상 상태는 매 턴 구조화된 값으로 갱신한다
 
-LLM이 자연어만 뱉으면 성공/실패를 코드로 판정할 수 없습니다. NPC 대사와 함께 `trust`, `priceGap`, `stage` 같은 필드를 매 응답에 강제로 포함시키고, 게임 로직은 이 숫자만 보고 진행 상황을 판단합니다. (형식은 5장 API 계약 참고)
+LLM이 자연어만 뱉으면 성공/실패를 코드로 판정할 수 없습니다. NPC 대사와 함께 `trust`, `agreementGap`, `currentOffer`, `stage` 필드를 매 응답에 강제로 포함시키고, 게임 로직은 이 값만 보고 진행 상황을 판단합니다. (형식은 5장 API 계약 참고)
+
+**협상 축은 가격으로 고정하지 않습니다.** 초안에는 `priceGap`(원 단위 숫자)이 있었지만, 스테이지 2는 가격+옵션 두 축이고 스테이지 3은 계약 조건이라 가격이 아예 없습니다. 그래서 "합의까지 남은 거리"를 뜻하는 `agreementGap`(0~100) 하나로 추상화하고, 실제 조건 내용은 `currentOffer`(사람이 읽는 자유 문장)에 담습니다. 축이 몇 개든, 돈이든 아니든 응답 형태가 같아지므로 프론트는 게이지 하나와 문장 한 줄만 그리면 되고, 스테이지별 분기가 생기지 않습니다. `currentOffer`는 ResultScene의 "최종 조건 요약"에도 그대로 쓰입니다.
 
 ### 대화 로그는 그 자체로 게임 데이터다
 
@@ -131,7 +133,8 @@ MainMenuScene에서 스테이지 목록을 그릴 때 호출. `npcPersonas/`에 
   "npcReply": "어서 오세요. 오늘은 뭘 보러 오셨나요?",
   "stage": "opening",
   "trust": 50,
-  "priceGap": 40000,
+  "agreementGap": 80,
+  "currentOffer": "12만원",
   "dealClosed": false
 }
 ```
@@ -152,7 +155,8 @@ MainMenuScene에서 스테이지 목록을 그릴 때 호출. `npcPersonas/`에 
   "npcReply": "음... 그 가격은 좀 어렵겠는데요.",
   "stage": "bargaining",
   "trust": 34,
-  "priceGap": 25000,
+  "agreementGap": 55,
+  "currentOffer": "11만원",
   "dealClosed": false
 }
 ```
@@ -208,7 +212,7 @@ MainMenuScene에서 스테이지 목록을 그릴 때 호출. `npcPersonas/`에 
 - **API 키는 반드시 백엔드 뒤에.** 클라이언트에서 Claude API를 직접 호출하지 않습니다.
 - **STT는 Web Speech API로 고정.** 크롬 기준으로만 먼저 검증하고, 다른 브라우저 대응은 이번 범위에서 뺍니다.
 - **지연시간.** STT → LLM → TTS 왕복이 1초를 넘으면 어색해집니다. NPC "생각 중" 모션으로 지연을 가려주세요.
-- **판정은 서버의 결정적 코드로.** LLM은 `trust`, `priceGap` 같은 재료 값만 제공하고, 최종 성공/실패 판정은 `negotiationEngine.ts`가 계산합니다.
+- **판정은 서버의 결정적 코드로.** LLM은 `trust`, `agreementGap` 같은 재료 값만 제공하고, 최종 성공/실패 판정은 `negotiationEngine.ts`가 계산합니다.
 - **음성 원본은 저장하지 않음.** STT 결과 텍스트만 세션에 남깁니다.
 
 ---

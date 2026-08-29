@@ -17,10 +17,19 @@ export interface Turn {
 /** 매 턴 갱신되는 구조화된 협상 상태. 게임 로직은 이 값만 보고 판단한다. */
 export interface NegotiationState {
   stage: NegotiationStage;
-  /** 0~100 */
+  /** 0~100. NPC가 플레이어를 얼마나 신뢰하는가. */
   trust: number;
-  /** NPC 목표가와 현재 제시가의 차이(원). 0에 가까울수록 타결에 가깝다. */
-  priceGap: number;
+  /**
+   * 0~100. 합의까지 남은 거리. 0이면 완전 합의, 100이면 평행선.
+   * 협상 축이 가격이든 계약 조건이든, 축이 몇 개든 이 숫자 하나로 표현한다.
+   */
+  agreementGap: number;
+  /**
+   * 지금 테이블 위에 올라와 있는 조건 요약. 사람이 읽는 자유 문장.
+   * 예: "9만 5천원" / "납기 6주, 하자보수 12개월"
+   * ResultScene의 "최종 조건 요약"이 이 값을 그대로 쓴다.
+   */
+  currentOffer: string;
   dealClosed: boolean;
 }
 

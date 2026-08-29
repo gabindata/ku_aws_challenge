@@ -11,7 +11,7 @@ export class MainMenuScene extends Phaser.Scene {
   async create(): Promise<void> {
     // TODO: ApiClient.getStages() → 버튼 생성 → 클릭 시
     //       this.scene.start(SceneKey.Negotiation, { npcId })
-    
+  
     const { width, height } = this.scale;
     
     //배경 이미지
@@ -22,6 +22,14 @@ export class MainMenuScene extends Phaser.Scene {
     );
 
     background.setDisplaySize(width, height);
+    
+    //배경 bgm
+    if (!this.sound.get('main-bgm')) {
+      this.sound.play('main-bgm', {
+        loop: true,
+        volume: 0.4,
+      });
+    }
 
     // 튜토리얼 버튼
     this.createMenuButton(width / 2, 630, '튜토리얼', () => {
@@ -68,7 +76,9 @@ export class MainMenuScene extends Phaser.Scene {
     //마우스를 버튼 위에 올렸을 때
     button.on('pointerover', () => {
       button.setTexture('button-highlight');
-      this.sound.play('button-hover');
+      this.sound.play('button-hover', {
+        volume: 0.4,
+      });
     });
     
     //마우스 버튼 밖
@@ -79,7 +89,9 @@ export class MainMenuScene extends Phaser.Scene {
     //버튼 누르는 순간
     button.on('pointerdown', () => {
       button.setTexture('button-highlight');
-      this.sound.play('button-click');
+      this.sound.play('button-click', {
+        volume: 0.4,
+      });
       onClick();
     });
     

@@ -9,6 +9,8 @@ export class PreloadScene extends Phaser.Scene {
 
   preload(): void {
     // TODO: this.load.image('npc_merchant_kim', 'assets/images/npc-portraits/merchant_kim.png') 등
+    
+    //메인 화면 리소스
     this.load.image(
       'main-menu-bg',
       '/assets/images/main-menu-bg.png'
@@ -22,6 +24,11 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image(
       'button-highlight',
       '/assets/images/ui/button-highlight.png'
+    );
+
+    this.load.audio(
+      'main-bgm',
+      '/assets/audio/main_bgm.mp3'
     );
 
     this.load.audio(

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
+import { SettingsPanel } from '../ui/SettingsPanel';
 
 /** 스테이지 선택. GET /api/stages 결과를 난이도 순으로 나열한다. */
 /**홈 화면 */
@@ -43,7 +44,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 설정 버튼
     this.createMenuButton(width / 2, 870, '설정', () => {
-      console.log('설정 클릭');
+      new SettingsPanel(this);
     });
   }
   

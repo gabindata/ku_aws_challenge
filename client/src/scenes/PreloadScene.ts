@@ -29,6 +29,11 @@ export class PreloadScene extends Phaser.Scene {
       '/assets/audio/button_click.mp3'
     );
     
+    this.load.audio(
+      'button-hover',
+      '/assets/audio/button_hover.mp3'
+    );
+
   }
 
   create(): void {

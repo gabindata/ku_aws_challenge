@@ -9,7 +9,7 @@ import type { NpcPersona } from './npcPersonaService';
  */
 
 export function initialState(_persona: NpcPersona): NegotiationState {
-  // TODO: stage='opening', trust=50, priceGap=targetPrice-floorPrice 등
+  // TODO: stage='opening', trust=50, agreementGap=100, currentOffer=NPC 초기 제시 조건
   throw new Error('not implemented');
 }
 
@@ -19,15 +19,14 @@ export function applyTurn(
   _persona: NpcPersona,
   _llm: LlmTurnResult,
 ): NegotiationState {
-  // TODO: trust 클램프(0~100), priceGap 갱신, isDealClosed/isBroken 판정
+  // TODO: trust/agreementGap 클램프(0~100), currentOffer 갱신, isDealClosed/isBroken 판정
   throw new Error('not implemented');
 }
 
-/** 페르소나의 successCriteria(최종가 >= floorPrice && trust >= 임계값)를 코드로 판정 */
+/** 페르소나의 successCriteria를 코드로 판정 (trust와 agreementGap 임계값 비교) */
 export function isDealClosed(
   _persona: NpcPersona,
   _state: NegotiationState,
-  _currentPrice: number,
 ): boolean {
   // TODO
   throw new Error('not implemented');

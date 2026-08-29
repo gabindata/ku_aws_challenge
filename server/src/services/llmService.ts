@@ -4,7 +4,7 @@ import type { NpcPersona } from './npcPersonaService';
 
 /**
  * Claude API 래퍼. API 키는 서버에만 존재한다 (설계 문서 7장).
- * LLM은 npcReply와 trust/priceGap 같은 "재료 값"만 제공하고,
+ * LLM은 npcReply와 trust/agreementGap 같은 "재료 값"만 제공하고,
  * 최종 성공/실패 판정은 negotiationEngine.ts가 결정적으로 계산한다.
  */
 
@@ -12,9 +12,9 @@ import type { NpcPersona } from './npcPersonaService';
 export interface LlmTurnResult {
   npcReply: string;
   trust: number;
-  priceGap: number;
-  /** NPC가 이번 턴에 제시/수용한 가격 */
-  offeredPrice: number;
+  agreementGap: number;
+  /** NPC가 이번 턴에 제시/수용한 조건 요약 (자유 문장) */
+  currentOffer: string;
   stage: NegotiationState['stage'];
 }
 

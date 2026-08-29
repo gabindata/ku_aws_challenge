@@ -7,15 +7,13 @@ export interface Session {
   /** {speaker, text, timestampMs} 누적 로그 — 판정/분석 공용 단일 소스 */
   turns: Turn[];
   state: NegotiationState;
-  /** 현재 테이블 위에 올라와 있는 가격(원) */
-  currentPrice: number;
   createdAtMs: number;
 }
 
 const sessions = new Map<string, Session>();
 
 export function createSession(_npcId: string): Session {
-  // TODO: sessionId 발급, 초기 state/currentPrice 세팅 후 sessions에 저장
+  // TODO: sessionId 발급, initialState()로 state 세팅 후 sessions에 저장
   throw new Error('not implemented');
 }
 

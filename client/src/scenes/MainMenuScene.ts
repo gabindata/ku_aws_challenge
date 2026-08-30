@@ -36,7 +36,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 튜토리얼 버튼
     this.createMenuButton(width / 2, 630, '튜토리얼', () => {
-      console.log('튜토리얼 클릭');
+      this.scene.start(SceneKey.Tutorial);
     });
 
     // 시작하기 버튼
@@ -144,9 +144,9 @@ export class MainMenuScene extends Phaser.Scene {
       noButton.destroy();
     };
 
-    yesButton.on('pointerdown', () => {
-      closePopup();
-      console.log('튜토리얼 화면으로 이동 예정');
+    yesButton.on('pointerdown', () => { 
+      closePopup(); 
+      this.scene.start(SceneKey.Tutorial);
     });
 
     noButton.on('pointerdown', () => {

@@ -5,6 +5,8 @@ import { SettingsPanel } from '../ui/SettingsPanel';
 /** 스테이지 선택. GET /api/stages 결과를 난이도 순으로 나열한다. */
 /**홈 화면 */
 export class MainMenuScene extends Phaser.Scene {
+  private settingsPanel?: SettingsPanel;
+
   constructor() {
     super(SceneKey.MainMenu);
   }
@@ -38,13 +40,17 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     // 시작하기 버튼
-    this.createMenuButton(width / 2, 750, '시작하기', () => {
-      console.log('시작하기 클릭');
+    this.createMenuButton(width / 2, 750, '시작하기', () => { 
+      this.scene.start(SceneKey.StageSelect);
     });
 
     // 설정 버튼
     this.createMenuButton(width / 2, 870, '설정', () => {
-      new SettingsPanel(this);
+      if (!this.settingsPanel) {
+        this.settingsPanel = new SettingsPanel(this, () => {
+          this.settingsPanel = undefined;
+        });
+      }
     });
   }
   

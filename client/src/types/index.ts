@@ -7,6 +7,7 @@ export const SceneKey = {
   Boot: 'BootScene',
   Preload: 'PreloadScene',
   MainMenu: 'MainMenuScene',
+  StageSelect: 'StageSelectScene',
   Negotiation: 'NegotiationScene',
   Result: 'ResultScene',
   StyleReport: 'StyleReportScene',

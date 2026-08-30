@@ -41,7 +41,14 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 시작하기 버튼
     this.createMenuButton(width / 2, 750, '시작하기', () => { 
-      this.scene.start(SceneKey.StageSelect);
+      const tutorialCompleted =
+        localStorage.getItem('tutorialCompleted');
+    
+      if (tutorialCompleted === 'true') {
+        this.scene.start(SceneKey.StageSelect);
+      } else {
+        this.showTutorialRequiredPopup();
+      }
     });
 
     // 설정 버튼
@@ -54,6 +61,100 @@ export class MainMenuScene extends Phaser.Scene {
     });
   }
   
+
+  //튜툐리얼 봤는지 확인하는 코드//
+  private showTutorialRequiredPopup(): void {
+    const { width, height } = this.scale;
+
+    const overlay = this.add
+      .rectangle(
+        width / 2,
+        height / 2,
+        width,
+        height,
+        0x000000,
+        0.6
+      )
+      .setInteractive();
+
+    const popup = this.add.rectangle(
+      width / 2,
+      height / 2,
+      650,
+      300,
+      0xffffff
+    );
+
+    const message = this.add
+      .text(
+        width / 2,
+        height / 2 - 55,
+        '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
+        {
+          fontSize: '28px',
+          color: '#000000',
+          fontFamily: 'YPairing',
+          align: 'center',
+          lineSpacing: 10,
+        }
+      )
+      .setOrigin(0.5);
+
+    const yesButton = this.add
+      .text(
+        width / 2 - 100,
+        height / 2 + 70,
+        '예',
+        {
+          fontSize: '26px',
+          color: '#ffffff',
+          backgroundColor: '#555555',
+          padding: {
+            x: 30,
+            y: 12,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    const noButton = this.add
+      .text(
+        width / 2 + 100,
+        height / 2 + 70,
+        '아니요',
+        {
+          fontSize: '26px',
+          color: '#ffffff',
+          backgroundColor: '#555555',
+          padding: {
+            x: 30,
+            y: 12,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    const closePopup = () => {
+      overlay.destroy();
+      popup.destroy();
+      message.destroy();
+      yesButton.destroy();
+      noButton.destroy();
+    };
+
+    yesButton.on('pointerdown', () => {
+      closePopup();
+      console.log('튜토리얼 화면으로 이동 예정');
+    });
+
+    noButton.on('pointerdown', () => {
+      closePopup();
+      this.scene.start(SceneKey.StageSelect);
+    });
+  }
+
   private createMenuButton(
     x: number,
     y: number,

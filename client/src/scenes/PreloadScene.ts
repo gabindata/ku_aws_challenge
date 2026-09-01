@@ -49,10 +49,15 @@ export class PreloadScene extends Phaser.Scene {
       '/assets/audio/button_hover.mp3'
     );
 
-    // 선택 화면 리소스
+    // 시간대 연출용 맵 레이어
     this.load.image(
-      'stage-select-bg',
-      'assets/images/stage-selection/stage-select-bg.png'
+      'stage-select-base',
+      '/assets/images/stage-selection/tutorial-map-bg.png'
+    );
+
+    this.load.image(
+      'stage-select-evening',
+      '/assets/images/stage-selection/tutorial-map-evening.png'
     );
 
   }

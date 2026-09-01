@@ -13,6 +13,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: 1920,
   height: 1080,
   backgroundColor: '#1a1a24',
+  pixelArt: true,
+  antialias: false,
+  roundPixels: true,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -28,7 +31,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
         x: 0,
         y: 0,
       },
-      debug: true,
+      debug: false,
     },
   },
 

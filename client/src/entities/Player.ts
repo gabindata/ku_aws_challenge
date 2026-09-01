@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private speed = 300;
+  private readonly groundShadow: Phaser.GameObjects.Ellipse;
 
   private keys: {
     W: Phaser.Input.Keyboard.Key;
@@ -31,6 +32,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.setScale(scale);
     this.setCollideWorldBounds(true);
+
+    // 긴 투영 그림자 대신 시간대와 관계없이 읽히는 짧은 접지 그림자를 사용한다.
+    this.groundShadow = scene.add
+      .ellipse(
+        x,
+        y + this.displayHeight * 0.38,
+        Math.max(14, this.displayWidth * 0.56),
+        Math.max(6, this.displayHeight * 0.14),
+        0x111424,
+        0.3
+      )
+      .setDepth(-1);
+
+    this.setDepth(0);
+    this.once('destroy', () => this.groundShadow.destroy());
 
     this.keys = scene.input.keyboard!.addKeys(
       'W,A,S,D'
@@ -60,5 +76,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.keys.S.isDown) {
       this.setVelocityY(this.speed);
     }
+
+    const velocity = this.body?.velocity;
+    if (velocity && velocity.lengthSq() > 0) {
+      velocity.normalize().scale(this.speed);
+    }
+
+    this.groundShadow.setPosition(
+      this.x,
+      this.y + this.displayHeight * 0.38
+    );
   }
 }

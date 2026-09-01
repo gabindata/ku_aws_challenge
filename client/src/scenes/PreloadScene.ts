@@ -10,12 +10,20 @@ export class PreloadScene extends Phaser.Scene {
   preload(): void {
     // TODO: this.load.image('npc_merchant_kim', 'assets/images/npc-portraits/merchant_kim.png') 등
     
+
+    //플레이어 리소스
+    this.load.image(
+      'player',
+      'assets/images/player/player.png'
+    );
+
     //메인 화면 리소스
     this.load.image(
       'main-menu-bg',
       '/assets/images/main-menu-bg.png'
     );
-
+    
+    // ui 리소스
     this.load.image(
       'button-default',
       '/assets/images/ui/button-default.png'
@@ -41,8 +49,14 @@ export class PreloadScene extends Phaser.Scene {
       '/assets/audio/button_hover.mp3'
     );
 
-  }
+    // 선택 화면 리소스
+    this.load.image(
+      'stage-select-bg',
+      'assets/images/stage-selection/stage-select-bg.png'
+    );
 
+  }
+  
   create(): void {
     this.scene.start(SceneKey.MainMenu);
   }

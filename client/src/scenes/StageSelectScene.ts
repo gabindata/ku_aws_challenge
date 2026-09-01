@@ -3,9 +3,42 @@ import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
 import { TimeOfDaySystem } from '../systems/TimeOfDaySystem';
 
+interface BlockedArea {
+  name: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+const SOURCE_MAP_WIDTH = 1672;
+const SOURCE_MAP_HEIGHT = 941;
+
+/**
+ * 첨부된 충돌 가이드의 빨간 영역. 큰 사각형 사이의 빈 공간만 걸을 수 있다.
+ * 좌표는 원본 맵 기준이라 게임 해상도가 바뀌어도 함께 비례 조정된다.
+ */
+const BLOCKED_AREAS: BlockedArea[] = [
+  { name: 'north-west', left: 0, top: 0, width: 302, height: 358 },
+  // 편의점 통로는 보도에서 현관까지만 열고 지붕과 뒤쪽은 막는다.
+  { name: 'store-back', left: 302, top: 0, width: 70, height: 245 },
+  { name: 'north-center', left: 372, top: 0, width: 693, height: 358 },
+  { name: 'north-east-center', left: 1190, top: 0, width: 155, height: 358 },
+  // 오른쪽 집도 현관 앞까지만 접근할 수 있게 통로 끝을 닫는다.
+  { name: 'house-back', left: 1345, top: 0, width: 60, height: 270 },
+  { name: 'north-east', left: 1405, top: 0, width: 267, height: 358 },
+  // 학교 현관으로 이어지는 좁은 통로(x 640~730)를 제외하고 아래를 막는다.
+  { name: 'south-west-left', left: 0, top: 570, width: 640, height: 371 },
+  { name: 'school-back', left: 640, top: 635, width: 90, height: 306 },
+  { name: 'south-west-right', left: 730, top: 570, width: 355, height: 371 },
+  { name: 'south-east', left: 1281, top: 570, width: 391, height: 371 },
+];
+
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
   private timeOfDay!: TimeOfDaySystem;
+  private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
+  private collisionDebugVisible = false;
     
   constructor() {
     super(SceneKey.StageSelect);
@@ -13,6 +46,8 @@ export class StageSelectScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
+    this.collisionDebugVisible = new URLSearchParams(window.location.search)
+      .get('collisionDebug') === '1';
   
     const background = this.add.image(
       width / 2,
@@ -62,115 +97,15 @@ export class StageSelectScene extends Phaser.Scene {
 
 
     this.player = new Player(
-        this,
-        width / 2,
-        height / 2,
-        'player',
-        0.045
-      );
-
-    //왼쪽 위 큰 집
-    const house1Collider = this.add.rectangle(
-        390,      // x 좌표
-        195,      // y 좌표
-        380,      // 가로 길이
-        170,      // 세로 길이
-        0xff0000, // 빨간색
-        0         // 충돌 영역은 화면에 표시하지 않음
-      );
-
-      this.physics.add.existing(house1Collider, true);
-      this.physics.add.collider(
-        this.player,
-        house1Collider
-      );
-
-    // 가운데 위쪽 작은 집 1
-    const house2Collider = this.add.rectangle(
-        810,
-        175,
-        120,
-        130,
-        0xff0000,
-        0
+      this,
+      width / 2,
+      height / 2,
+      'player',
+      0.045
     );
-    
-    this.physics.add.existing(house2Collider, true);
-    this.physics.add.collider(this.player, house2Collider);
-    
-    
-    // 가운데 위쪽 작은 집 2
-    const house3Collider = this.add.rectangle(
-        1035,
-        175,
-        120,
-        130,
-        0xff0000,
-        0
-    );
-    
-    this.physics.add.existing(house3Collider, true);
-    this.physics.add.collider(this.player, house3Collider);
-    
-    
-    // 오른쪽 위 큰 집
-    const house4Collider = this.add.rectangle(
-        1570,
-        210,
-        420,
-        220,
-        0xff0000,
-        0
-    );
-    
-    this.physics.add.existing(house4Collider, true);
-    this.physics.add.collider(this.player, house4Collider);
-    
-    
-    // 아래쪽 큰 건물
-    const house5Collider = this.add.rectangle(
-        780,
-        850,
-        750,
-        330,
-        0xff0000,
-        0
-    );
-    
-    this.physics.add.existing(house5Collider, true);
-    this.physics.add.collider(this.player, house5Collider);
-    
 
-    // 지붕 
-    const roof1 = this.add.rectangle(
-        1580,
-        70,
-        80,
-        25,
-        0xff0000,
-        0
-      );
-      
-      const roof2 = this.add.rectangle(
-        1580,
-        95,
-        140,
-        25,
-        0xff0000,
-        0
-      );
-      
-
-
-      this.physics.add.existing(roof1, true);
-      this.physics.add.existing(roof2, true);
- 
-      
-      this.physics.add.collider(this.player, roof1);
-      this.physics.add.collider(this.player, roof2);
-
-
-
+    this.createCollisionAreas(width, height);
+    this.configureCamera(width, height);
 
   }
 
@@ -179,7 +114,7 @@ export class StageSelectScene extends Phaser.Scene {
     this.timeOfDay.update(delta);
   }
 
-  /** 개발 중 1=낮, 2=노을, 3=저녁, T=자동 흐름을 확인한다. */
+  /** 개발 중 1=낮, 2=노을, 3=저녁, T=자동 흐름, C=충돌 영역을 확인한다. */
   private registerTimeOfDayTestKeys(): void {
     const keyboard = this.input.keyboard;
     if (!keyboard) return;
@@ -191,6 +126,47 @@ export class StageSelectScene extends Phaser.Scene {
       const isAutoPlaying = this.timeOfDay.toggleAutoPlay();
       console.info(`시간대 자동 진행: ${isAutoPlaying ? '켜짐' : '꺼짐'}`);
     });
+    keyboard.on('keydown-C', () => this.toggleCollisionDebug());
+  }
+
+  private createCollisionAreas(worldWidth: number, worldHeight: number): void {
+    const scaleX = worldWidth / SOURCE_MAP_WIDTH;
+    const scaleY = worldHeight / SOURCE_MAP_HEIGHT;
+
+    this.collisionAreas = BLOCKED_AREAS.map((area) => {
+      const width = area.width * scaleX;
+      const height = area.height * scaleY;
+      const blocker = this.add
+        .rectangle(
+          (area.left + area.width / 2) * scaleX,
+          (area.top + area.height / 2) * scaleY,
+          width,
+          height,
+          0xff1744,
+          this.collisionDebugVisible ? 0.48 : 0
+        )
+        .setDepth(1_000)
+        .setName(`blocked-${area.name}`);
+
+      this.physics.add.existing(blocker, true);
+      this.physics.add.collider(this.player, blocker);
+      return blocker;
+    });
+  }
+
+  private configureCamera(worldWidth: number, worldHeight: number): void {
+    const camera = this.cameras.main;
+    camera.setBounds(0, 0, worldWidth, worldHeight);
+    camera.setZoom(1.5);
+    camera.setRoundPixels(true);
+    camera.setDeadzone(280, 180);
+    camera.startFollow(this.player, true, 0.1, 0.1);
+  }
+
+  private toggleCollisionDebug(): void {
+    this.collisionDebugVisible = !this.collisionDebugVisible;
+    const alpha = this.collisionDebugVisible ? 0.48 : 0;
+    this.collisionAreas.forEach((area) => area.setAlpha(alpha));
   }
 
 }

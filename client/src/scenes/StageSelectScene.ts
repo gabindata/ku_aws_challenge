@@ -161,7 +161,7 @@ export class StageSelectScene extends Phaser.Scene {
     );
     // E키 등록
     this.interactKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.E
+      Phaser.Input.Keyboard.KeyCodes.F
     );
 
     // 협상 장소의 입구 상호작용 영역 생성
@@ -238,12 +238,12 @@ export class StageSelectScene extends Phaser.Scene {
   
     console.log('상호작용 영역 생성됨');
   
-    // [E] 들어가기 안내
+    // [F] 들어가기 안내
     this.enterText = this.add
       .text(
         0,
         0,
-        '[E] 눌러 들어가기',
+        '[F] 눌러 들어가기',
         {
           fontSize: '18px',
           color: '#ffffff',
@@ -272,7 +272,7 @@ export class StageSelectScene extends Phaser.Scene {
         height
       );
   
-      // 실제 E 감지 영역
+      // 실제 F 감지 영역
       const zone = this.add.zone(
         x,
         y,

@@ -36,7 +36,7 @@ export class NegotiationScene extends Phaser.Scene {
       }
     )
     .setOrigin(0.5);
-        // STT 관리자 생성
+    // STT 관리자 생성
     this.voiceInput = new VoiceInputManager();
 
     // STT 결과 표시

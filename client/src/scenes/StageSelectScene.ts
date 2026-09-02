@@ -11,6 +11,15 @@ interface BlockedArea {
   height: number;
 }
 
+interface InteractionArea {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  npcId: string;
+}
+
 const SOURCE_MAP_WIDTH = 1672;
 const SOURCE_MAP_HEIGHT = 941;
 
@@ -34,11 +43,58 @@ const BLOCKED_AREAS: BlockedArea[] = [
   { name: 'south-east', left: 1281, top: 570, width: 391, height: 371 },
 ];
 
+/**
+ * 집 / 건물 입구 상호작용 영역
+ *
+ * x, y는 원본 맵 기준
+ *
+ * 현재 좌표는 대략적인 값이므로
+ * 실제 화면에서 조금씩 조정
+ */
+const INTERACTION_AREAS: InteractionArea[] = [
+  {
+    name: 'convenience-store',
+    x: 337,
+    y: 315,
+    width: 100,
+    height: 100,
+    npcId: 'manager_yang',
+  },
+
+  {
+    name: 'department-office',
+    x: 685,
+    y: 600,
+    width: 110,
+    height: 100,
+    npcId: 'assistant_han',
+  },
+
+  {
+    name: 'hallway-302',
+    x: 1375,
+    y: 325,
+    width: 100,
+    height: 100,
+    npcId: 'seo_heejung',
+  },
+];
+
+
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
   private timeOfDay!: TimeOfDaySystem;
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
   private collisionDebugVisible = false;
+
+  //건물 상호작용 관련
+  private interactKey!: Phaser.Input.Keyboard.Key;
+  private nearbyNpcId: string | null = null;
+  private enterText!: Phaser.GameObjects.Text;
+  private interactionZones: {
+    zone: Phaser.GameObjects.Zone;
+    area: InteractionArea;
+  }[] = [];
     
   constructor() {
     super(SceneKey.StageSelect);
@@ -103,6 +159,16 @@ export class StageSelectScene extends Phaser.Scene {
       'player',
       0.045
     );
+    // E키 등록
+    this.interactKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.E
+    );
+
+    // 협상 장소의 입구 상호작용 영역 생성
+    this.createInteractionAreas(
+      width,
+      height
+    );
 
     this.createCollisionAreas(width, height);
     this.configureCamera(width, height);
@@ -112,6 +178,40 @@ export class StageSelectScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.player.update();
     this.timeOfDay.update(delta);
+  
+    // 매 프레임 기본 상태
+    this.nearbyNpcId = null;
+    this.enterText.setVisible(false);
+  
+    // 플레이어가 어떤 interaction zone 안에 있는지 확인
+    for (const { zone, area } of this.interactionZones) {
+      if (this.physics.overlap(this.player, zone)) {
+        this.nearbyNpcId = area.npcId;
+  
+        const scaleX = this.scale.width / SOURCE_MAP_WIDTH;
+        const scaleY = this.scale.height / SOURCE_MAP_HEIGHT;
+  
+        // 영역 안에 들어오기만 하면 바로 표시
+        this.enterText
+          .setPosition(
+            area.x * scaleX,
+            (area.y - 65) * scaleY
+          )
+          .setVisible(true);
+  
+        break;
+      }
+    }
+  
+    // 영역 안에서 E를 눌렀을 때만 협상 화면 이동
+    if (
+      this.nearbyNpcId &&
+      Phaser.Input.Keyboard.JustDown(this.interactKey)
+    ) {
+      this.scene.start(SceneKey.Negotiation, {
+        npcId: this.nearbyNpcId,
+      });
+    }
   }
 
   /** 개발 중 1=낮, 2=노을, 3=저녁, T=자동 흐름, C=충돌 영역을 확인한다. */
@@ -127,6 +227,69 @@ export class StageSelectScene extends Phaser.Scene {
       console.info(`시간대 자동 진행: ${isAutoPlaying ? '켜짐' : '꺼짐'}`);
     });
     keyboard.on('keydown-C', () => this.toggleCollisionDebug());
+  }
+
+  private createInteractionAreas(
+    worldWidth: number,
+    worldHeight: number
+  ): void {
+    const scaleX = worldWidth / SOURCE_MAP_WIDTH;
+    const scaleY = worldHeight / SOURCE_MAP_HEIGHT;
+  
+    console.log('상호작용 영역 생성됨');
+  
+    // [E] 들어가기 안내
+    this.enterText = this.add
+      .text(
+        0,
+        0,
+        '[E] 눌러 들어가기',
+        {
+          fontSize: '18px',
+          color: '#ffffff',
+          backgroundColor: '#000000',
+          padding: {
+            x: 10,
+            y: 6,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(6000)
+      .setVisible(false);
+  
+    INTERACTION_AREAS.forEach((area) => {
+      const x = area.x * scaleX;
+      const y = area.y * scaleY;
+      const width = area.width * scaleX;
+      const height = area.height * scaleY;
+  
+      console.log(
+        `interaction 생성: ${area.name}`,
+        x,
+        y,
+        width,
+        height
+      );
+  
+      // 실제 E 감지 영역
+      const zone = this.add.zone(
+        x,
+        y,
+        width,
+        height
+      );
+  
+ 
+      // 플레이어가 영역에 들어왔을 때
+      this.physics.add.existing(zone, true);
+
+      // update()에서 확인할 수 있도록 zone 저장
+      this.interactionZones.push({
+        zone,
+        area,
+      });
+    });
   }
 
   private createCollisionAreas(worldWidth: number, worldHeight: number): void {
@@ -165,8 +328,16 @@ export class StageSelectScene extends Phaser.Scene {
 
   private toggleCollisionDebug(): void {
     this.collisionDebugVisible = !this.collisionDebugVisible;
-    const alpha = this.collisionDebugVisible ? 0.48 : 0;
-    this.collisionAreas.forEach((area) => area.setAlpha(alpha));
+  
+    // 빨간색 = 이동 불가능 영역
+    const collisionAlpha = this.collisionDebugVisible ? 0.48 : 0;
+
+  
+    this.collisionAreas.forEach((area) => {
+      area.setAlpha(collisionAlpha);
+    });
+  
+
   }
 
 }

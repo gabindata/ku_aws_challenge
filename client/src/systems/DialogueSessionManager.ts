@@ -1,27 +1,27 @@
-import type { NegotiationState, Turn } from '../types';
+import type { AgreementMemoItem, NegotiationView, Turn } from '../types';
 
 /**
- * 턴 기록과 세션 상태를 클라이언트 쪽에서 들고 있는 곳.
- * 판정의 원본은 서버지만, 자막 히스토리·게이지 표시는 이 값으로 그린다.
+ * 클라이언트가 들고 있는 세션 상태.
+ * 판정의 원본은 서버다. 여기 값은 자막 히스토리와 화면 표시용이다.
  */
 export class DialogueSessionManager {
   sessionId = '';
-  npcId = '';
+  stageId = 0;
   turns: Turn[] = [];
-  state: NegotiationState | null = null;
 
-  reset(_sessionId: string, _npcId: string): void {
+  /** 이미 성립한 합의만 들어온다. 남은 정답은 서버가 보내주지 않는다. */
+  agreementMemo: AgreementMemoItem[] = [];
+  remainingSeconds: number | null = null;
+  latest: NegotiationView | null = null;
+
+  reset(_sessionId: string, _stageId: number): void {
     // TODO
     throw new Error('not implemented');
   }
 
-  addTurn(_turn: Turn): void {
-    // TODO
-    throw new Error('not implemented');
-  }
-
-  updateState(_state: NegotiationState): void {
-    // TODO
+  /** 서버 응답 1건을 반영한다. */
+  apply(_view: NegotiationView): void {
+    // TODO: agreementMemo/remainingSeconds 갱신, npcReply를 turns에 추가
     throw new Error('not implemented');
   }
 }

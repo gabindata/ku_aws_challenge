@@ -1,0 +1,85 @@
+{
+  "stageId": 1,
+  "npcId": "store_owner_yang",
+  "npcName": "양점장",
+  "location": "동네 편의점",
+  "difficulty": "easy",
+  "quest": "무경력 상태로 편의점 아르바이트를 구한다",
+
+  "unlockRequirements": ["tutorial_cleared"],
+  "timeLimitSeconds": 600,
+
+  "requiredAgreementKeys": [
+    "scheduleAgreed",
+    "immediateStartAgreed",
+    "reliabilityAgreed"
+  ],
+
+  "agreementDefinitions": {
+    "scheduleAgreed": {
+      "label": "근무 일정",
+      "validatorId": "weekdaySchedule",
+      "expected": {
+        "weekdays": ["MON", "TUE", "WED", "THU", "FRI"],
+        "start": "23:00",
+        "end": "07:00",
+        "minimumDayCount": 5
+      },
+      "allowContextConfirmation": true,
+      "selfProposalRequired": false,
+      "visibility": "secret_until_dialogue",
+      "revealTriggers": [
+        "필요한 요일이나 근무 횟수를 묻는다",
+        "자신이 가능한 근무 일정을 먼저 제안한다"
+      ],
+      "memoText": "평일 5일 · 23:00–07:00"
+    },
+
+    "immediateStartAgreed": {
+      "label": "시작일",
+      "validatorId": "exactOffer",
+      "expected": { "startOfferId": "next_monday_night" },
+      "allowContextConfirmation": true,
+      "selfProposalRequired": false,
+      "visibility": "public",
+      "revealTriggers": [],
+      "memoText": "다음 주 월요일 야간 시작"
+    },
+
+    "reliabilityAgreed": {
+      "label": "책임 약속",
+      "validatorId": "reliabilityAnyOf",
+      "expected": {
+        "minDurationMonths": 3,
+        "acceptedAdvanceNotice": "previous_day"
+      },
+      "allowContextConfirmation": false,
+      "selfProposalRequired": true,
+      "visibility": "public",
+      "revealTriggers": [],
+      "memoText": ""
+    }
+  },
+
+  "openingLines": [
+    "아, 전단지 보고 오셨어요? ...잠깐만요, 이거만 정리하고.",
+    "편의점 해보신 적 있어요? 경력자 우대라고 써두긴 했는데. 일단 간단하게 면접부터 볼까요?"
+  ],
+
+  "expressionKeys": [
+    "busy",
+    "checking_schedule",
+    "concerned",
+    "confirming",
+    "relieved",
+    "closed"
+  ],
+  "defaultExpressionKey": "busy",
+
+  "styleReportConfig": {
+    "highlight": ["formality", "directness"],
+    "allowedStageTags": ["empty_pledge"]
+  },
+
+  "successState": "part_time_job_secured"
+}

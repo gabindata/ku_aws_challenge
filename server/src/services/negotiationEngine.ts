@@ -5,30 +5,16 @@ import type {
   Outcome,
 } from '../../../shared/types/negotiationTypes';
 import type { Session } from '../models/session';
-import type { AgreementDefinition, StageDefinition } from '../data/stageSchema';
+import type { StageDefinition } from '../data/stageSchema';
+
+// 비교기는 validators.ts에 있다. 판정 진입점은 isSatisfied() 하나.
+export { isSatisfied, isKnownValidator, validators } from './validators';
+export type { Validator } from './validators';
 
 /**
  * 판정은 전부 여기서 한다. 서버는 한국어를 파싱하지 않고
  * LLM이 정규화한 value와 스테이지 요구값을 구조체로 비교만 한다 (공통규칙 §5).
  */
-
-// ── 비교기 ──
-
-/**
- * validatorId → 비교 함수. 스테이지 JSON이 이 id를 가리킨다.
- *
- * 스테이지 1의 reliabilityAgreed는 "3개월 이상 근무 또는 전날 연락"이라는
- * OR 조건이라 단순 동등 비교로는 표현되지 않는다. 그래서 비교 로직을
- * validatorId로 이름 붙여 등록하고, expected는 그 함수의 인자로만 쓴다.
- */
-export type Validator = (
-  value: Record<string, unknown>,
-  expected: Record<string, unknown>,
-) => boolean;
-
-export const validators: Record<string, Validator> = {
-  // TODO(2주차): weekdayRange, exactOffer, reliabilityAnyOf 등록
-};
 
 // ── 합의 병합 (공통규칙 §2) ──
 
@@ -51,14 +37,6 @@ export function applyEvaluation(
   _llm: LlmTurnOutput,
 ): { agreements: AgreementState[]; evidenceMismatchKeys: string[] } {
   // TODO(2주차)
-  throw new Error('not implemented');
-}
-
-export function isSatisfied(
-  _definition: AgreementDefinition,
-  _value: Record<string, unknown>,
-): boolean {
-  // TODO(2주차): validators[definition.validatorId] 호출
   throw new Error('not implemented');
 }
 

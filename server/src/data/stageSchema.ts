@@ -25,10 +25,16 @@ export interface AgreementDefinition {
   revealTriggers: string[];
   /**
    * 성립 시 합의 메모에 표시할 고정 문구. 예: "평일 5일 · 23:00–07:00"
-   * 빈 문자열이면 서버가 합의된 value로 문구를 만든다
-   * (스테이지 1의 reliabilityAgreed처럼 플레이어가 무엇을 약속했느냐에 따라 달라지는 경우).
+   * 무엇을 합의했든 문구가 같은 키에 쓴다.
    */
   memoText: string;
+  /**
+   * memoText가 빈 문자열일 때 쓰는 문구 틀. value의 필드 이름 → 문구.
+   * 플레이어가 무엇을 약속했느냐에 따라 메모가 달라지는 키에 쓴다
+   * (스테이지 1의 reliabilityAgreed: "3개월 근무" 또는 "전날 연락").
+   * {value}는 그 필드의 값으로 치환된다. 여러 개가 맞으면 " · "로 잇는다.
+   */
+  memoTemplates?: Record<string, string>;
 }
 
 export interface StageDefinition {

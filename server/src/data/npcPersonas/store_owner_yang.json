@@ -57,7 +57,11 @@
       "selfProposalRequired": true,
       "visibility": "public",
       "revealTriggers": [],
-      "memoText": ""
+      "memoText": "",
+      "memoTemplates": {
+        "durationMonths": "{value}개월 근무",
+        "advanceNotice": "전날 연락"
+      }
     }
   },
 

@@ -8,7 +8,7 @@ export class NegotiationScene extends Phaser.Scene {
   private npcId!: string;
   
   constructor() {
-    super(SceneKey.Negotiation);
+    super(SceneKey.Negotiation1);
   }
 
   init(data: { npcId: string }): void {

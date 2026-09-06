@@ -8,7 +8,9 @@ export const SceneKey = {
   Preload: 'PreloadScene',
   MainMenu: 'MainMenuScene',
   StageSelect: 'StageSelectScene',
-  Negotiation: 'NegotiationScene',
+  Negotiation1: 'NegotiationScene1',
+  Negotiation2: 'NegotiationScene2',
+  Negotiation3: 'NegotiationScene3',
   Result: 'ResultScene',
   StyleReport: 'StyleReportScene',
 } as const;

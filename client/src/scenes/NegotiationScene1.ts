@@ -3,6 +3,7 @@ import { SceneKey } from '../types';
 import { VoiceInputManager } from '../systems/VoiceInputManager';
 import { DialogueBox } from '../ui/DialogueBox';
 import { MicButton } from '../ui/MicButton';
+import { TimerDisplay } from '../ui/TimerDisplay';
 
 /** 스테이지 1 — 편의점 양점장 협상 화면 */
 export class NegotiationScene1 extends Phaser.Scene {
@@ -10,6 +11,9 @@ export class NegotiationScene1 extends Phaser.Scene {
   private dialogueBox!: DialogueBox;
   private micButton!: MicButton;
   private npcId!: string;
+  private timerDisplay!: TimerDisplay;
+  private remainingSeconds = 600;
+  private timerEvent?: Phaser.Time.TimerEvent;
 
   constructor() {
     super(SceneKey.Negotiation1);
@@ -86,6 +90,14 @@ export class NegotiationScene1 extends Phaser.Scene {
       }
     );
 
+    this.timerDisplay = new TimerDisplay(
+      this,
+      150,
+      80
+    );
+
+    this.startTemporaryTimer();
+
     // TODO:
     // 나중에 ApiClient.startNegotiation(this.npcId)
     // 호출해서 실제 NPC 첫 대사를 받아오도록 변경
@@ -146,6 +158,38 @@ export class NegotiationScene1 extends Phaser.Scene {
         this.micButton.setRetry();
       }
     );
+  }
+
+  private startTemporaryTimer(): void {
+    this.timerDisplay.setRemainingSeconds(
+      this.remainingSeconds
+    );
+  
+    this.timerEvent = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+  
+      callback: () => {
+        this.remainingSeconds -= 1;
+  
+        this.timerDisplay.setRemainingSeconds(
+          this.remainingSeconds
+        );
+  
+        if (this.remainingSeconds <= 0) {
+          this.remainingSeconds = 0;
+  
+          this.timerDisplay.setRemainingSeconds(0);
+  
+          this.timerEvent?.remove();
+  
+          console.log('협상 시간 종료');
+  
+          // 나중에 서버 결과에 따라 ResultScene으로 이동
+          // this.scene.start(SceneKey.Result);
+        }
+      },
+    });
   }
 
   /**

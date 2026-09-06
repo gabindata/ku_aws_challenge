@@ -22,6 +22,17 @@ export class PreloadScene extends Phaser.Scene {
       'main-menu-bg',
       '/assets/images/main-menu-bg.png'
     );
+
+    //스테이지1 리소스
+    this.load.image(
+      'stage1-bg',
+      'assets/images/stage1/convenience-store-bg.png'
+    );
+    
+    this.load.image(
+      'manager-yang',
+      'assets/images/stage1/manager-yang.png'
+    );
     
     // ui 리소스
     this.load.image(

@@ -23,6 +23,24 @@ export class NegotiationScene1 extends Phaser.Scene {
 
     const { width, height } = this.scale;
 
+    const background = this.add.image(
+      width / 2,
+      height / 2,
+      'stage1-bg'
+    );
+    
+    background.setDisplaySize(width, height);
+    background.setDepth(-10);
+
+    const managerYang = this.add.image(
+      width * 0.72,
+      height * 0.58,
+      'manager-yang'
+    );
+    
+    managerYang.setScale(0.6);
+    managerYang.setDepth(10);
+
 
 
     this.add

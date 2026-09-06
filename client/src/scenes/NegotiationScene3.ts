@@ -3,7 +3,7 @@ import { SceneKey } from '../types';
 import { VoiceInputManager } from '../systems/VoiceInputManager';
 
 /** 실시간 협상 — 마이크 버튼, 자막, 협상 게이지. */
-export class NegotiationScene extends Phaser.Scene {
+export class NegotiationScene3 extends Phaser.Scene {
   private voiceInput!: VoiceInputManager;
   private npcId!: string;
   

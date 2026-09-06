@@ -203,14 +203,30 @@ export class StageSelectScene extends Phaser.Scene {
       }
     }
   
-    // 영역 안에서 E를 눌렀을 때만 협상 화면 이동
+    // 영역 안에서 F를 눌렀을 때만 협상 화면 이동
     if (
       this.nearbyNpcId &&
       Phaser.Input.Keyboard.JustDown(this.interactKey)
     ) {
-      this.scene.start(SceneKey.Negotiation, {
-        npcId: this.nearbyNpcId,
-      });
+      switch (this.nearbyNpcId) {
+        case 'manager_yang':
+          this.scene.start(SceneKey.Negotiation1, {
+            npcId: this.nearbyNpcId,
+          });
+          break;
+    
+        case 'assistant_han':
+          this.scene.start(SceneKey.Negotiation2, {
+            npcId: this.nearbyNpcId,
+          });
+          break;
+    
+        case 'seo_heejung':
+          this.scene.start(SceneKey.Negotiation3, {
+            npcId: this.nearbyNpcId,
+          });
+          break;
+      }
     }
   }
 

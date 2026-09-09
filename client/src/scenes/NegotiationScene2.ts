@@ -1,111 +1,227 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { VoiceInputManager } from '../systems/VoiceInputManager';
+import { DialogueBox } from '../ui/DialogueBox';
+import { MicButton } from '../ui/MicButton';
+import { TimerDisplay } from '../ui/TimerDisplay';
 
-/** 실시간 협상 — 마이크 버튼, 자막, 협상 게이지. */
+/** 스테이지 2 — 학과 사무실 한조교 협상 화면 */
 export class NegotiationScene2 extends Phaser.Scene {
   private voiceInput!: VoiceInputManager;
+  private dialogueBox!: DialogueBox;
+  private micButton!: MicButton;
   private npcId!: string;
-  
+  private timerDisplay!: TimerDisplay;
+  private remainingSeconds = 600;
+  private timerEvent?: Phaser.Time.TimerEvent;
+
   constructor() {
     super(SceneKey.Negotiation2);
   }
 
   init(data: { npcId: string }): void {
     this.npcId = data.npcId;
-  
+
     console.log('선택된 NPC:', this.npcId);
   }
 
   create(): void {
-    // TODO: ApiClient.startNegotiation(npcId) → 첫 대사 표시 + TTS 재생
-    // TODO: MicButton / DialogueBox / NegotiationMeter 배치
-
     const { width, height } = this.scale;
 
+    // =========================
+    // 배경
+    // =========================
 
-
-    this.add
-    .text(
-      width / 2,
-      60,
-      `NPC: ${this.npcId}`,
-      {
-        fontSize: '24px',
-        color: '#ffff00',
-      }
-    )
-    .setOrigin(0.5);
-    // STT 관리자 생성
-    this.voiceInput = new VoiceInputManager();
-
-    // STT 결과 표시
-    const resultText = this.add.text(
+    const background = this.add.image(
       width / 2,
       height / 2,
-      '말한 내용이 여기에 표시됩니다.',
-      {
-        fontSize: '24px',
-        color: '#ffffff',
-        wordWrap: {
-          width: 700,
-        },
-        align: 'center',
-      }
+      'stage2-bg'
     );
 
-    resultText.setOrigin(0.5);
+    background.setDisplaySize(width, height);
+    background.setDepth(-10);
 
-    // 임시 마이크 버튼
-    const micButton = this.add.text(
+    // =========================
+    // 한조교 캐릭터
+    // =========================
+
+    const assistantHan = this.add.image(
+      width * 0.72,
+      height * 0.58,
+      'assistant-han'
+    );
+
+    assistantHan.setScale(0.6);
+    assistantHan.setDepth(10);
+
+    // =========================
+    // 대화창
+    // =========================
+
+    this.dialogueBox = new DialogueBox(
+      this,
+      width / 2,
+      height * 0.72,
+      width * 0.75
+    );
+
+    // 첫 화면
+    this.dialogueBox.setSpeaker('npc');
+    this.dialogueBox.showText(
+      '무슨 일로 오셨어요?'
+    );
+
+    // =========================
+    // STT 관리자
+    // =========================
+
+    this.voiceInput = new VoiceInputManager();
+
+    // =========================
+    // 마이크 버튼
+    // =========================
+
+    this.micButton = new MicButton(
+      this,
       width / 2,
       height - 100,
-      '🎤 말하기',
-      {
-        fontSize: '30px',
-        color: '#ffffff',
-        backgroundColor: '#333333',
-        padding: {
-          x: 20,
-          y: 10,
-        },
+      () => {
+        this.startVoiceInput();
       }
     );
 
-    micButton.setOrigin(0.5);
+    // =========================
+    // 타이머
+    // =========================
 
-    micButton.setInteractive({
-      useHandCursor: true,
-    });
+    this.timerDisplay = new TimerDisplay(
+      this,
+      150,
+      80
+    );
 
-    // 마이크 클릭
-    micButton.on('pointerdown', () => {
-      micButton.setText('🎤 듣는 중...');
+    this.startTemporaryTimer();
 
-      this.voiceInput.start(
-        (text) => {
-          console.log('플레이어 발화:', text);
+    // TODO:
+    // 나중에 ApiClient.startNegotiation(this.npcId)
+    // 호출해서 실제 NPC 첫 대사를 받아오도록 변경
+  }
 
-          resultText.setText(text);
+  /**
+   * 마이크 버튼 클릭 시 STT 시작
+   */
+  private startVoiceInput(): void {
+    this.dialogueBox.setSpeaker('player');
+    this.dialogueBox.showThinking();
 
-          micButton.setText('🎤 말하기');
-        },
+    this.micButton.setRecording(true);
+    this.micButton.setDisabled(true);
 
-        (error) => {
-          console.error('STT 오류:', error);
+    this.voiceInput.start(
+      (text) => {
+        console.log('플레이어 발화:', text);
 
-          resultText.setText('음성 인식에 실패했습니다.');
+        if (!text.trim()) {
+          this.dialogueBox.setSpeaker('system');
+          this.dialogueBox.showText(
+            '말소리가 들리지 않았어요. 다시 한 번 말해 주세요.'
+          );
 
-          micButton.setText('🎤 말하기');
+          this.micButton.setDisabled(false);
+          this.micButton.setRetry();
+
+          return;
         }
-      );
+
+        this.dialogueBox.setSpeaker('player');
+        this.dialogueBox.showText(text);
+
+        this.micButton.setRecording(false);
+        this.micButton.setDisabled(false);
+
+        this.time.delayedCall(1800, () => {
+          this.dialogueBox.setSpeaker('npc');
+          this.dialogueBox.showThinking();
+
+          // LLM 아직 안 붙였으니까 지금은 버튼 잠그지 않음
+        });
+      },
+
+      (error) => {
+        console.error('STT 오류:', error);
+
+        this.dialogueBox.setSpeaker('system');
+        this.dialogueBox.showText(
+          '음성을 제대로 인식하지 못했어요. 다시 한 번 말해 주세요.'
+        );
+
+        this.micButton.setDisabled(false);
+        this.micButton.setRetry();
+      }
+    );
+  }
+
+  private startTemporaryTimer(): void {
+    this.timerDisplay.setRemainingSeconds(
+      this.remainingSeconds
+    );
+
+    this.timerEvent = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+
+      callback: () => {
+        this.remainingSeconds -= 1;
+
+        this.timerDisplay.setRemainingSeconds(
+          this.remainingSeconds
+        );
+
+        if (this.remainingSeconds <= 0) {
+          this.remainingSeconds = 0;
+
+          this.timerDisplay.setRemainingSeconds(0);
+
+          this.timerEvent?.remove();
+
+          console.log('협상 시간 종료');
+
+          // 나중에 서버 결과에 따라 ResultScene으로 이동
+          // this.scene.start(SceneKey.Result);
+        }
+      },
     });
   }
 
-  /** 플레이어 발화 1턴 처리: STT 결과 → /turn → 화면 갱신 → TTS */
-  private async handlePlayerUtterance(_playerText: string): Promise<void> {
-    // TODO: 응답 대기 동안 NPC "생각 중" 모션으로 지연을 가린다 (설계 문서 7장)
-    // TODO: dealClosed === true 면 더 이상 턴을 보내지 않고 ResultScene으로 전환
+  /**
+   * 플레이어 발화 1턴 처리
+   */
+  private async handlePlayerUtterance(
+    _playerText: string
+  ): Promise<void> {
+    // TODO:
+    // const response =
+    //   await ApiClient.sendTurn(
+    //     this.sessionId,
+    //     _playerText
+    //   );
+
+    // TODO:
+    // this.dialogueBox.setSpeaker('npc');
+    // this.dialogueBox.showText(
+    //   response.npcReply
+    // );
+
+    // TODO:
+    // TTS 재생
+
+    // TODO:
+    // 응답 처리 끝난 뒤
+    // this.micButton.setDisabled(false);
+    // this.micButton.setRecording(false);
+
+    // TODO:
+    // 결과 응답이 success/failure면
     // this.scene.start(SceneKey.Result);
   }
 }

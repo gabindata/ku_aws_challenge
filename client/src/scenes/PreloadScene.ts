@@ -33,6 +33,17 @@ export class PreloadScene extends Phaser.Scene {
       'manager-yang',
       'assets/images/stage1/manager-yang.png'
     );
+
+    //스테이지2 리소스
+    this.load.image(
+      'stage2-bg',
+      'assets/images/stage2/stage2-bg.png'
+    );
+    
+    this.load.image(
+      'assistant-han',
+      'assets/images/stage2/assistant-han.png'
+    );
     
     // ui 리소스
     this.load.image(

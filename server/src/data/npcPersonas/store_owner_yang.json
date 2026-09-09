@@ -4,10 +4,9 @@
   "npcName": "양점장",
   "location": "동네 편의점",
   "difficulty": "easy",
-  "quest": "무경력 상태로 편의점 아르바이트를 구한다",
-
-  "unlockRequirements": ["tutorial_cleared"],
+  "unlockRequirements": ["tutorial_completed"],
   "timeLimitSeconds": 600,
+  "maxLlmCallsPerSession": 40,
 
   "requiredAgreementKeys": [
     "scheduleAgreed",
@@ -17,47 +16,58 @@
 
   "agreementDefinitions": {
     "scheduleAgreed": {
-      "label": "근무 일정",
-      "validatorId": "weekdaySchedule",
-      "expected": {
-        "weekdays": ["MON", "TUE", "WED", "THU", "FRI"],
-        "start": "23:00",
-        "end": "07:00",
-        "minimumDayCount": 5
-      },
-      "allowContextConfirmation": true,
-      "selfProposalRequired": false,
-      "visibility": "secret_until_dialogue",
-      "revealTriggers": [
-        "필요한 요일이나 근무 횟수를 묻는다",
-        "자신이 가능한 근무 일정을 먼저 제안한다"
+      "intent": "평일 5일 23:00~07:00 야간 전체 근무 합의",
+      "passWhen": [
+        "조건을 직접 말해 수락한다",
+        "NPC의 정확한 제안을 맥락상 분명히 수락한다"
       ],
-      "memoText": "평일 5일 · 23:00–07:00"
+      "clarifyWhen": [
+        "가능한 평일 수나 시간이 불명확하다",
+        "2~4일만 가능하거나 주말만 가능하다고 말한다",
+        "성립 후 특정 평일이 어려울 수도 있다는 뉘앙스를 보인다"
+      ],
+      "revokeWhen": [
+        "성립 후 특정 평일 또는 해당 시간 근무가 불가능하다고 분명히 말한다"
+      ],
+      "contextConsentAllowed": true,
+      "playerMustPropose": false,
+      "memoGuide": "합의한 요일과 시간을 그대로 적는다"
     },
 
     "immediateStartAgreed": {
-      "label": "시작일",
-      "validatorId": "exactOffer",
-      "expected": { "startOfferId": "next_monday_night" },
-      "allowContextConfirmation": true,
-      "selfProposalRequired": false,
-      "visibility": "public",
-      "revealTriggers": [],
-      "memoText": "다음 주 월요일 야간 시작"
+      "intent": "다음 주 월요일 야간 시작 합의",
+      "passWhen": [
+        "해당 시작 시점을 직접 확정한다",
+        "NPC의 정확한 시작 제안을 맥락상 분명히 수락한다"
+      ],
+      "clarifyWhen": [
+        "바로, 다음 주쯤처럼 시점이나 확정 의사가 모호하다"
+      ],
+      "revokeWhen": [
+        "성립 후 더 늦게 시작하겠다고 바꾼다"
+      ],
+      "contextConsentAllowed": true,
+      "playerMustPropose": false,
+      "memoGuide": "합의한 시작 시점을 적는다"
     },
 
     "reliabilityAgreed": {
-      "label": "책임 약속",
-      "validatorId": "reliabilityAnyOf",
-      "expected": {
-        "minDurationMonths": 3,
-        "acceptedAdvanceNotice": "previous_day"
-      },
-      "allowContextConfirmation": false,
-      "selfProposalRequired": true,
-      "visibility": "public",
-      "revealTriggers": [],
-      "memoText": ""
+      "intent": "장기 근무 또는 사전 연락을 통한 책임 약속",
+      "passWhen": [
+        "3개월 이상으로 읽히는 기간을 스스로 제안한다 (3개월, 반년, 이번 학기 동안, 졸업할 때까지)",
+        "결근이나 일정 변경을 늦어도 전날 알리겠다는 뜻을 스스로 제안한다"
+      ],
+      "clarifyWhen": [
+        "열심히, 오래, 꾸준히처럼 기간의 하한이 읽히지 않는다",
+        "방학 동안, 두세 달처럼 하한이 3개월 미만일 수 있다",
+        "미리 연락하겠다고만 하고 시점이나 방식이 없다"
+      ],
+      "revokeWhen": [
+        "책임 약속을 철회하거나 지킬 수 없다고 말한다"
+      ],
+      "contextConsentAllowed": false,
+      "playerMustPropose": true,
+      "memoGuide": "플레이어가 실제로 제안한 기간 또는 연락 약속을 적는다. 지어내지 않는다"
     }
   },
 
@@ -75,6 +85,20 @@
     "closed"
   ],
   "defaultExpressionKey": "busy",
+  "successExpressionKey": "relieved",
+  "failureExpressionKey": "closed",
+
+  "successText": "양점장이 채용을 결정했습니다.",
+  "fixedTerms": [
+    "법정 시급 및 야간수당 적용",
+    "첫 2회 양점장 동반 교육"
+  ],
+  "limitText": "이야기가 길어져 오늘 면접은 여기서 끝났습니다.",
+  "failureHints": {
+    "scheduleAgreed": "점장이 어느 시간대에 사람이 없어 힘들어하는지 먼저 물어보세요.",
+    "immediateStartAgreed": "언제부터 일할 수 있는지 날짜로 이야기해 보세요.",
+    "reliabilityAgreed": "점장이 왜 불안해하는지 듣고, 무엇을 할 수 있는지 직접 말해 보세요."
+  },
 
   "styleReportConfig": {
     "highlight": ["formality", "directness"],

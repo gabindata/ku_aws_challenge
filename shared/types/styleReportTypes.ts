@@ -20,13 +20,22 @@ export interface StyleSignals {
   evidenceTurnId: string;
 }
 
-/** 공통 다섯 지표. 스테이지가 지표를 추가할 수는 있어도 삭제할 수는 없다. */
+/**
+ * 공통 다섯 지표. 스테이지가 지표를 추가할 수는 있어도 삭제할 수는 없다.
+ *
+ * 차트에는 0~100인 네 개(formality·directness·hedging·questionRatio)만 올린다.
+ * avgUtteranceLength는 단위가 글자 수라 같은 축에 놓을 수 없으므로
+ * "한 번에 평균 OO자" 숫자 카드로 따로 보여준다. 0~100으로 환산하지 않는다.
+ */
 export interface StyleMetrics {
   /** 유효 턴 formality의 산술평균(반올림) */
   formality: number;
   directness: number;
   hedging: number;
-  /** 서버 계산 — 유효 플레이어 발화의 정규화된 글자 수 평균 (어절 수 아님) */
+  /**
+   * 서버 계산 — 유효 플레이어 발화의 글자 수 평균 (어절 수 아님).
+   * 앞뒤 공백을 제거하고 연속 공백을 하나로 정리한 뒤 센다.
+   */
   avgUtteranceLength: number;
   /** isQuestion:true 발화 수 ÷ 유효 플레이어 발화 수 (0~100) */
   questionRatio: number;

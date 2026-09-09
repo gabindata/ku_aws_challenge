@@ -6,7 +6,7 @@ import type { StageDefinition } from '../data/stageSchema';
 // __dirname 기준이라 터미널을 어디서 실행하든 안전하다.
 const STAGE_DIR = path.join(__dirname, '..', 'data', 'npcPersonas');
 
-/** 처음부터 열려 있는 스테이지에 "권장 시작"을 표시할 stageId */
+/** "권장 시작"을 표시할 stageId */
 const RECOMMENDED_STAGE_ID = 1;
 
 /**
@@ -37,24 +37,24 @@ export function getStage(stageId: number): StageDefinition | undefined {
   return loadAllStages().find((s) => s.stageId === stageId);
 }
 
-export function getStageByNpcId(npcId: string): StageDefinition | undefined {
-  return loadAllStages().find((s) => s.npcId === npcId);
-}
-
 /**
  * GET /api/stages 응답. 월드맵 표시에 필요한 값만 고른다.
  *
- * agreementDefinitions에는 정답과 비공개 조건이 들어 있으므로
+ * agreementDefinitions에는 판정 기준표와 비공개 요구가 들어 있으므로
  * StageDefinition을 통째로 내보내지 않는다.
+ *
+ * 해금 여부는 클라이언트가 로컬 저장소에 보관한 월드 상태 키로 판정한다.
+ * 공통규칙 §3에 따라 이 저장은 클라이언트를 신뢰하는 구조이며,
+ * 조작 방지는 MVP 범위 밖이다.
  */
-export function listStages(clearedStates: string[] = []): StageSummary[] {
+export function listStages(worldStateKeys: string[] = []): StageSummary[] {
   return loadAllStages().map((s) => ({
     stageId: s.stageId,
     npcId: s.npcId,
     npcName: s.npcName,
     location: s.location,
     difficulty: s.difficulty,
-    unlocked: (s.unlockRequirements ?? []).every((r) => clearedStates.includes(r)),
+    unlocked: (s.unlockRequirements ?? []).every((r) => worldStateKeys.includes(r)),
     recommended: s.stageId === RECOMMENDED_STAGE_ID,
   }));
 }

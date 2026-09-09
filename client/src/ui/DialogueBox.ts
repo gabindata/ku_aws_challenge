@@ -6,15 +6,20 @@ export class DialogueBox extends Phaser.GameObjects.Container {
   private speakerText: Phaser.GameObjects.Text;
   private dialogueText: Phaser.GameObjects.Text;
 
+  private npcName: string;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
-    width: number
+    width: number,
+    npcName: string
   ) {
     super(scene, x, y);
 
     scene.add.existing(this);
+
+    this.npcName = npcName;
 
     // 대화창 배경
     this.box = scene.add.rectangle(
@@ -32,7 +37,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     this.speakerText = scene.add.text(
       -width / 2 + 40,
       -65,
-      '양점장',
+      this.npcName,
       {
         fontSize: '28px',
         color: '#ffff66',
@@ -44,7 +49,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     this.dialogueText = scene.add.text(
       -width / 2 + 40,
       -20,
-      '어서 와요. 무슨 일로 왔어요?',
+      '',
       {
         fontSize: '26px',
         color: '#ffffff',
@@ -72,7 +77,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     }
 
     if (speaker === 'npc') {
-      this.speakerText.setText('양점장');
+      this.speakerText.setText(this.npcName);
       this.speakerText.setColor('#ffff66');
       return;
     }

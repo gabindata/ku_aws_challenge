@@ -62,7 +62,8 @@ export class NegotiationScene2 extends Phaser.Scene {
       this,
       width / 2,
       height * 0.72,
-      width * 0.75
+      width * 0.75,
+      '한조교'
     );
 
     // 첫 화면

@@ -4,8 +4,14 @@ import type {
   LlmTurnOutput,
   Outcome,
 } from '../../../shared/types/negotiationTypes';
-import type { Session } from '../models/session';
-import type { StageDefinition } from '../data/stageSchema';
+import { findPlayerTurn, lastNpcTurn, setAgreement, type Session } from '../models/session';
+import {
+  MAX_LLM_PAUSE_SECONDS,
+  TTS_CHARS_PER_SECOND,
+  TTS_PAUSE_MAX_SECONDS,
+  TTS_PAUSE_MIN_SECONDS,
+  type StageDefinition,
+} from '../data/stageSchema';
 
 /**
  * 서버 판정.
@@ -48,18 +54,131 @@ export interface MergeResult {
  * 충돌하지 않는다.
  */
 export function applyJudgements(
-  _session: Session,
-  _stage: StageDefinition,
-  _llm: LlmTurnOutput,
+  session: Session,
+  stage: StageDefinition,
+  llm: LlmTurnOutput,
 ): MergeResult {
-  // TODO(다음 단계)
-  throw new Error('not implemented');
+  const result: MergeResult = {
+    newlyMetKeys: [],
+    revokedKeys: [],
+    pendingKeys: [],
+    evidenceMismatchKeys: [],
+    selfProposalMissingKeys: [],
+    unknownKeys: [],
+  };
+
+  const anchorTurn = lastNpcTurn(session.sessionId);
+
+  for (const [key, judgement] of Object.entries(llm.judgements)) {
+    // 허용 키 검증 — 스테이지에 정의되지 않은 키는 받지 않는다 (공통규칙 §8)
+    const definition = stage.agreementDefinitions[key];
+    if (!definition || !stage.requiredAgreementKeys.includes(key)) {
+      result.unknownKeys.push(key);
+      continue;
+    }
+
+    const current = session.agreements[key];
+    let action = judgement.action;
+
+    if (action === 'keep') continue;
+
+    // 근거 ID 검증 — confirm/revoke/clarify 모두에 적용한다.
+    // 잘못된 ID는 상태에 반영하지 않고 NPC 재확인과 로그만 남긴다 (공통규칙 §8).
+    if (!hasValidEvidence(session, judgement.evidenceTurnIds)) {
+      result.evidenceMismatchKeys.push(key);
+      continue;
+    }
+
+    // 짧은 맥락 동의의 anchor가 실제 직전 NPC 메시지인지 확인한다.
+    // contextConsentAllowed 자체는 서버가 재판정하지 않는다 — 판정 기준표에 담겨
+    // LLM에 전달되며, 스테이지 1에서 이 값이 false인 키는 playerMustPropose도
+    // true라 아래 selfProposed 검사가 같은 경우를 막는다.
+    if (judgement.contextAnchorTurnId != null) {
+      if (anchorTurn === undefined || anchorTurn.id !== judgement.contextAnchorTurnId) {
+        result.evidenceMismatchKeys.push(key);
+        continue;
+      }
+    }
+
+    // playerMustPropose 키의 confirm은 selfProposed가 true여야 한다.
+    // 값이 없거나 false면 clarify로 강등한다. 의미를 판단하는 것이 아니라
+    // LLM이 준 불린 값만 보므로 서버의 의미 판단 금지 원칙과 충돌하지 않는다.
+    if (action === 'confirm' && definition.playerMustPropose && judgement.selfProposed !== true) {
+      action = 'clarify';
+      result.selfProposalMissingKeys.push(key);
+    }
+
+    const now = Date.now();
+
+    if (action === 'clarify') {
+      // unmet이면 그대로 둔다. met이면 pending_reconfirm으로 내려 성공 판정에서 뺀다.
+      if (current?.status !== 'met') continue;
+      setAgreement(session.sessionId, key, {
+        status: 'pending_reconfirm',
+        summary: current.summary,
+        evidenceTurnIds: current.evidenceTurnIds,
+        lastAction: 'clarify',
+        updatedAtMs: now,
+      });
+      result.pendingKeys.push(key);
+      continue;
+    }
+
+    if (action === 'revoke') {
+      // 이미 unmet이면 아무 일도 일어나지 않는다.
+      if (current?.status === 'unmet') continue;
+      setAgreement(session.sessionId, key, {
+        status: 'unmet',
+        summary: null,
+        evidenceTurnIds: [],
+        lastAction: 'revoke',
+        updatedAtMs: now,
+      });
+      result.revokedKeys.push(key);
+      continue;
+    }
+
+    // confirm
+    const wasMet = current?.status === 'met';
+    setAgreement(session.sessionId, key, {
+      status: 'met',
+      summary: judgement.agreementSummary ?? null,
+      evidenceTurnIds: judgement.evidenceTurnIds,
+      lastAction: 'confirm',
+      updatedAtMs: now,
+    });
+    // 이미 met이던 걸 다시 확인한 경우에는 복창하지 않는다.
+    if (!wasMet) result.newlyMetKeys.push(key);
+  }
+
+  logRejections(result);
+  return result;
+}
+
+/** evidenceTurnIds가 비어 있지 않고 전부 이 세션의 플레이어 발화인가 */
+function hasValidEvidence(session: Session, ids: string[] | undefined): boolean {
+  if (!ids || ids.length === 0) return false;
+  return ids.every((id) => findPlayerTurn(session.sessionId, id) !== undefined);
+}
+
+function logRejections(result: MergeResult): void {
+  if (result.evidenceMismatchKeys.length > 0) {
+    console.warn(`[engine] EVIDENCE_MISMATCH: ${result.evidenceMismatchKeys.join(', ')}`);
+  }
+  if (result.selfProposalMissingKeys.length > 0) {
+    // 자주 찍히면 NPC 대사 규칙이 지켜지지 않는다는 신호다 (공통규칙 §6)
+    console.warn(`[engine] SELF_PROPOSAL_MISSING: ${result.selfProposalMissingKeys.join(', ')}`);
+  }
+  if (result.unknownKeys.length > 0) {
+    console.warn(`[engine] 스테이지에 없는 합의 키: ${result.unknownKeys.join(', ')}`);
+  }
 }
 
 /** 필수 키가 모두 met인가. pending_reconfirm은 미충족으로 센다. */
-export function allRequiredMet(_session: Session, _stage: StageDefinition): boolean {
-  // TODO(다음 단계)
-  throw new Error('not implemented');
+export function allRequiredMet(session: Session, stage: StageDefinition): boolean {
+  return stage.requiredAgreementKeys.every(
+    (key) => session.agreements[key]?.status === 'met',
+  );
 }
 
 // ── 종료 판정 (공통규칙 §6 종료 우선순위) ──
@@ -77,14 +196,71 @@ export function allRequiredMet(_session: Session, _stage: StageDefinition): bool
  * 마감 스냅샷 안에 접수된 발화는 LLM 판정을 끝까지 수행하며,
  * 그 발화로 필수 키가 모두 충족되면 시간 초과보다 성공이 우선한다.
  */
+export interface OutcomeInput {
+  /** 발화를 접수한 시각 */
+  receivedAtMs: number;
+  /** 접수 순간 고정한 마감. null이면 시간 제한 없음 */
+  deadlineSnapshotMs: number | null;
+  /** stageVerdict가 fatal이고 근거·유형 검증을 통과했는가 */
+  fatal: boolean;
+}
+
 export function resolveOutcome(
-  _session: Session,
-  _stage: StageDefinition,
-  _receivedAtMs: number,
-  _deadlineSnapshotMs: number | null,
+  session: Session,
+  stage: StageDefinition,
+  input: OutcomeInput,
 ): { outcome: Outcome; endReason: EndReason } {
-  // TODO(다음 단계)
-  throw new Error('not implemented');
+  // 3. 치명적 행동
+  if (input.fatal) return { outcome: 'failure', endReason: 'fatal' };
+
+  // 5. 필수 키가 모두 met이면 성공. stageVerdict와 무관하며 시간·호출 상한보다 앞선다.
+  if (allRequiredMet(session, stage)) return { outcome: 'success', endReason: null };
+
+  // 6. 시간 만료. 접수 시점에 고정한 마감으로만 판단한다.
+  if (isExpired(Date.now(), input.deadlineSnapshotMs)) {
+    return { outcome: 'failure', endReason: 'time' };
+  }
+
+  // 7. 판정 호출 상한. 40번째 호출도 정상 판정한 뒤 여기서 종료된다.
+  if (session.llmCallCount >= stage.maxLlmCallsPerSession) {
+    return { outcome: 'failure', endReason: 'limit' };
+  }
+
+  return { outcome: 'in_progress', endReason: null };
+}
+
+/**
+ * 마감 판정. 시간 제한이 없으면 만료되지 않는다.
+ *
+ * 마감 이후 접수된 새 입력은 LLM에 보내지 않고 failure / time을 반환해야 하므로
+ * 라우트가 LLM 호출 전에 이 함수로 먼저 거른다.
+ */
+export function isExpired(atMs: number, deadlineSnapshotMs: number | null): boolean {
+  if (deadlineSnapshotMs === null) return false;
+  return atMs > deadlineSnapshotMs;
+}
+
+/**
+ * LLM의 stageVerdict: fatal을 받아들일지 판정한다.
+ *
+ * 근거 ID나 행동 유형이 없으면 출력 불일치이므로 받아들이지 않는다.
+ * 그 경우 호출부가 수정 재요청을 한 번 한다 (공통규칙 §6).
+ */
+export function isFatalConfirmed(session: Session, llm: LlmTurnOutput): boolean {
+  if (llm.stageVerdict !== 'fatal') return false;
+  const { detected, type, evidenceTurnIds } = llm.fatalBehavior;
+  if (!detected || type === null) return false;
+  return hasValidEvidence(session, evidenceTurnIds);
+}
+
+/** stageVerdict와 실제 판정이 갈렸는가. 프롬프트 품질 지표로 로그에 남긴다. */
+export function isVerdictMismatch(
+  llm: LlmTurnOutput,
+  outcome: Outcome,
+): boolean {
+  if (llm.stageVerdict === 'success' && outcome !== 'success') return true;
+  if (llm.stageVerdict === 'continue' && outcome === 'success') return true;
+  return false;
 }
 
 /**
@@ -92,17 +268,33 @@ export function resolveOutcome(
  * pending_reconfirm도 미충족으로 센다.
  * 종료 시점에는 LLM을 호출하지 않으므로 스테이지 정의에서만 고른다.
  */
-export function timeoutHint(_session: Session, _stage: StageDefinition): string | null {
-  // TODO(다음 단계)
-  throw new Error('not implemented');
+export function timeoutHint(session: Session, stage: StageDefinition): string | null {
+  const firstUnmet = stage.requiredAgreementKeys.find(
+    (key) => session.agreements[key]?.status !== 'met',
+  );
+  if (firstUnmet === undefined) return null;
+  return stage.failureHints[firstUnmet] ?? null;
 }
 
 // ── 타이머 계산 (공통규칙 §4) ──
 
-/** NPC TTS 정지 시간 = clamp(2, ceil(한글 글자 수 / 5), 15)초 */
-export function ttsPauseSeconds(_npcReply: string): number {
-  // TODO(다음 단계)
-  throw new Error('not implemented');
+/**
+ * NPC TTS 정지 시간 = clamp(2, ceil(한글 글자 수 / 5), 15)초.
+ *
+ * 공통규칙이 "한글 글자 수"라고 못박아 그대로 구현했다.
+ * 대사에 "23:00~07:00" 같은 숫자가 들어가면 실제 낭독보다 짧게 잡히는데,
+ * 이건 기획에 확인 요청해둔 항목이다. 하한 2초가 최악을 막는다.
+ */
+export function ttsPauseSeconds(npcReply: string): number {
+  const hangul = npcReply.match(/[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/g);
+  const count = hangul?.length ?? 0;
+  const raw = Math.ceil(count / TTS_CHARS_PER_SECOND);
+  return Math.min(TTS_PAUSE_MAX_SECONDS, Math.max(TTS_PAUSE_MIN_SECONDS, raw));
+}
+
+/** 서버 처리 정지 시간. 요청당 최대 20초까지만 인정한다. */
+export function processingPauseSeconds(elapsedMs: number): number {
+  return Math.min(MAX_LLM_PAUSE_SECONDS, Math.max(0, elapsedMs / 1000));
 }
 
 // ── 표시용 값 ──

@@ -108,7 +108,18 @@ export const TTS_CHARS_PER_SECOND = 5;
 /** 프롬프트에 포함할 최근 왕복 수 */
 export const MAX_HISTORY_EXCHANGES = 6;
 export const MAX_PROMPT_TOKENS = 4000;
-export const MAX_OUTPUT_TOKENS = 500;
+/**
+ * 출력 상한. 공통규칙 §4의 원안은 500이지만 1500으로 올렸다.
+ *
+ * 실제 응답 크기를 재보니 합의 키 하나만 판정해도 약 660토큰이고,
+ * 스테이지 3에서 다섯 키가 한 턴에 판정되면 1700토큰을 넘는다.
+ * 500을 유지하면 거의 매 턴 JSON이 잘려 파싱에 실패하고,
+ * 수정 재요청 -> 재실패 -> retry/system으로 이어져 오히려 호출이 늘어난다.
+ * 비용을 아끼려는 값이 비용을 키우는 상황이라 올렸다.
+ *
+ * 글자 수 기반 추정이므로 2주차에 count_tokens로 실측해 확정한다.
+ */
+export const MAX_OUTPUT_TOKENS = 1500;
 
 /** 남은 시간 경고 시점(초) */
 export const TIMER_WARNING_SECONDS = [120, 30] as const;

@@ -279,15 +279,16 @@ export function timeoutHint(session: Session, stage: StageDefinition): string | 
 // ── 타이머 계산 (공통규칙 §4) ──
 
 /**
- * NPC TTS 정지 시간 = clamp(2, ceil(한글 글자 수 / 5), 15)초.
+ * NPC TTS 정지 시간 = clamp(2, ceil(공백 제외 글자 수 / 5), 15)초.
  *
- * 공통규칙이 "한글 글자 수"라고 못박아 그대로 구현했다.
- * 대사에 "23:00~07:00" 같은 숫자가 들어가면 실제 낭독보다 짧게 잡히는데,
- * 이건 기획에 확인 요청해둔 항목이다. 하한 2초가 최악을 막는다.
+ * 공통규칙 §4의 원안은 "한글 글자 수"지만 공백을 제외한 전체 글자 수로 센다.
+ * 이 식의 목적이 낭독에 걸리는 시간을 추정하는 것인데, NPC 대사에는
+ * "밤 11시부터 아침 7시" 같은 숫자가 실제로 나오고 그것도 소리 내어 읽힌다.
+ * 한글만 세면 정지 시간이 실제보다 짧아지고, NPC가 말하는 동안 타이머가
+ * 돌아 플레이어가 손해를 본다.
  */
 export function ttsPauseSeconds(npcReply: string): number {
-  const hangul = npcReply.match(/[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/g);
-  const count = hangul?.length ?? 0;
+  const count = npcReply.replace(/\s/g, '').length;
   const raw = Math.ceil(count / TTS_CHARS_PER_SECOND);
   return Math.min(TTS_PAUSE_MAX_SECONDS, Math.max(TTS_PAUSE_MIN_SECONDS, raw));
 }

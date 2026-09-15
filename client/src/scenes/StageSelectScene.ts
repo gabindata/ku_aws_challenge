@@ -84,6 +84,8 @@ const INTERACTION_AREAS: InteractionArea[] = [
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
   private timeOfDay!: TimeOfDaySystem;
+  private clockText!: Phaser.GameObjects.Text;
+  private clockContainer!: Phaser.GameObjects.Container;
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
   private collisionDebugVisible = false;
 
@@ -102,6 +104,9 @@ export class StageSelectScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
+
+    this.interactionZones = [];
+
     this.collisionDebugVisible = new URLSearchParams(window.location.search)
       .get('collisionDebug') === '1';
   
@@ -149,6 +154,13 @@ export class StageSelectScene extends Phaser.Scene {
       darkness
     );
 
+    const savedGameMinutes = this.registry.get('gameTimeMinutes');
+
+    if (typeof savedGameMinutes === 'number') {
+      this.timeOfDay.setGameMinutes(savedGameMinutes);
+    }
+
+
     this.registerTimeOfDayTestKeys();
 
 
@@ -159,7 +171,7 @@ export class StageSelectScene extends Phaser.Scene {
       'player',
       0.045
     );
-    // E키 등록
+    // F키 등록
     this.interactKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.F
     );
@@ -172,12 +184,22 @@ export class StageSelectScene extends Phaser.Scene {
 
     this.createCollisionAreas(width, height);
     this.configureCamera(width, height);
+    this.createClock();
+
+    // 다른 씬으로 이동할 때 현재 게임 시간 저장
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.registry.set(
+        'gameTimeMinutes',
+        this.timeOfDay.getGameMinutes()
+      );
+    });
 
   }
 
   update(_time: number, delta: number): void {
     this.player.update();
     this.timeOfDay.update(delta);
+    this.updateClock();
   
     // 매 프레임 기본 상태
     this.nearbyNpcId = null;
@@ -340,6 +362,73 @@ export class StageSelectScene extends Phaser.Scene {
     camera.setRoundPixels(true);
     camera.setDeadzone(280, 180);
     camera.startFollow(this.player, true, 0.1, 0.1);
+  }
+
+  private createClock(): void {
+    // 시계 배경
+    const clockBackground = this.add
+      .image(0, 0, 'button-default')
+      .setDisplaySize(220, 90)
+      .setAlpha(0.8);
+  
+    // 시간 텍스트
+    this.clockText = this.add
+      .text(
+        0,
+        0,
+        '00:00',
+        {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
+          fontSize: '32px',
+          color: '#ffffff',
+          align: 'center',
+        }
+      )
+      .setOrigin(0.5);
+  
+    // 배경 + 시간을 하나로 묶음
+    this.clockContainer = this.add.container(
+      0,
+      0,
+      [
+        clockBackground,
+        this.clockText,
+      ]
+    );
+  
+    // 맨 위에 표시
+    this.clockContainer.setDepth(10000);
+  
+    // 카메라 줌 영향을 상쇄
+    this.clockContainer.setScale(
+      1 / this.cameras.main.zoom
+    );
+  }
+  
+  private updateClock(): void {
+    const totalMinutes = this.timeOfDay.getGameMinutes();
+  
+    // 화면에는 30분 단위로 표시
+    const displayMinutes = Math.floor(totalMinutes / 30) * 30;
+  
+    const hour = Math.floor(displayMinutes / 60);
+    const minute = displayMinutes % 60;
+  
+    const hourText = hour.toString().padStart(2, '0');
+    const minuteText = minute.toString().padStart(2, '0');
+    
+    this.clockText.setText(`${hourText}:${minuteText}`);
+  
+    // 현재 카메라 기준 좌측 상단에 고정
+    const camera = this.cameras.main;
+    const marginX = 135 / camera.zoom;
+    const marginY = 60 / camera.zoom;
+
+    this.clockContainer.setPosition(
+      camera.worldView.left + marginX,
+      camera.worldView.top + marginY
+    );
   }
 
   private toggleCollisionDebug(): void {

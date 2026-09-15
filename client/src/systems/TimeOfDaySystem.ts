@@ -26,21 +26,18 @@ const LOOKS: Record<TimeOfDayPreset, TimeOfDayLook> = {
   },
 };
 
-// 낮에서 저녁까지 5분, 저녁에서 다시 낮까지 5분.
-const HALF_CYCLE_DURATION_MS = 5 * 60 * 1000;
+// 게임 속 24시간 = 실제 5분
+const FULL_DAY_DURATION_MS = 5 * 60 * 1000;
 
-// 숫자 키로 시간대를 시험할 때도 약 6초에 걸쳐 자연스럽게 전환한다.
+// 숫자 키로 시간대를 시험할 때 부드럽게 전환
 const MANUAL_TRANSITION_SMOOTHING_MS = 2_000;
 
-/**
- * 중립 베이스맵 위에 색조와 야간 조명 레이어를 합성한다.
- * progress 0 = 낮, 0.5 = 노을, 1 = 저녁이다.
- */
 export class TimeOfDaySystem {
-  private progress = 0;
+  // 0 = 00:00, 0.5 = 12:00, 1 = 24:00
+  private dayProgress = 0;
+
   private targetProgress = 0;
   private autoPlay = true;
-  private autoDirection = 1;
 
   constructor(
     private readonly baseMap: Phaser.GameObjects.Image,
@@ -48,63 +45,135 @@ export class TimeOfDaySystem {
     private readonly sunlight: Phaser.GameObjects.Graphics,
     private readonly darkness: Phaser.GameObjects.Rectangle
   ) {
-    this.applyLook(this.progress);
+    this.applyTimeOfDay(this.dayProgress);
   }
 
   update(delta: number): void {
     if (this.autoPlay) {
-      // 낮→저녁 5분, 저녁→낮 5분으로 천천히 왕복한다.
-      this.progress += this.autoDirection * (delta / HALF_CYCLE_DURATION_MS);
+      this.dayProgress += delta / FULL_DAY_DURATION_MS;
 
-      if (this.progress >= 1) {
-        this.progress = 1;
-        this.autoDirection = -1;
-      } else if (this.progress <= 0) {
-        this.progress = 0;
-        this.autoDirection = 1;
+      if (this.dayProgress >= 1) {
+        this.dayProgress %= 1;
       }
     } else {
-      // 숫자 키로 바꿀 때도 화면이 갑자기 전환되지 않도록 보간한다.
-      this.progress = Phaser.Math.Linear(
-        this.progress,
+      this.dayProgress = Phaser.Math.Linear(
+        this.dayProgress,
         this.targetProgress,
         1 - Math.exp(-delta / MANUAL_TRANSITION_SMOOTHING_MS)
       );
     }
 
-    this.applyLook(this.progress);
+    this.applyTimeOfDay(this.dayProgress);
   }
 
   setPreset(preset: TimeOfDayPreset): void {
     this.autoPlay = false;
-    this.targetProgress = preset === 'day' ? 0 : preset === 'sunset' ? 0.5 : 1;
+
+    // 테스트용 시간
+    this.targetProgress =
+      preset === 'day'
+        ? 12 / 24
+        : preset === 'sunset'
+          ? 18 / 24
+          : 0;
   }
 
   toggleAutoPlay(): boolean {
     this.autoPlay = !this.autoPlay;
-    this.targetProgress = this.progress;
+    this.targetProgress = this.dayProgress;
     return this.autoPlay;
   }
 
+  getGameMinutes(): number {
+    return Math.floor(this.dayProgress * 24 * 60);
+  }
+
+  setGameMinutes(minutes: number): void {
+    this.dayProgress = (minutes % (24 * 60)) / (24 * 60);
+    this.targetProgress = this.dayProgress;
+    this.applyTimeOfDay(this.dayProgress);
+  }
+
+  private applyTimeOfDay(dayProgress: number): void {
+    const hour = dayProgress * 24;
+
+    let visualProgress: number;
+
+    // 00:00 ~ 06:00 : 밤 → 낮
+    if (hour < 6) {
+      visualProgress = Phaser.Math.Linear(1, 0, hour / 6);
+    }
+
+    // 06:00 ~ 16:00 : 낮
+    else if (hour < 16) {
+      visualProgress = 0;
+    }
+
+    // 16:00 ~ 20:00 : 낮 → 노을 → 밤
+    else if (hour < 20) {
+      visualProgress = (hour - 16) / 4;
+    }
+
+    // 20:00 ~ 24:00 : 밤
+    else {
+      visualProgress = 1;
+    }
+
+    this.applyLook(visualProgress);
+  }
+
   private applyLook(progress: number): void {
-    const first = progress <= 0.5 ? LOOKS.day : LOOKS.sunset;
-    const second = progress <= 0.5 ? LOOKS.sunset : LOOKS.night;
-    const amount = progress <= 0.5 ? progress * 2 : (progress - 0.5) * 2;
+    const first =
+      progress <= 0.5
+        ? LOOKS.day
+        : LOOKS.sunset;
 
-    this.baseMap.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.IntegerToColor(first.baseTint),
-      Phaser.Display.Color.IntegerToColor(second.baseTint),
-      100,
-      Math.round(amount * 100)
-    ).color);
+    const second =
+      progress <= 0.5
+        ? LOOKS.sunset
+        : LOOKS.night;
 
-    this.darkness.setAlpha(Phaser.Math.Linear(first.darkness, second.darkness, amount));
-    this.sunlight.setAlpha(Phaser.Math.Linear(first.sunlight, second.sunlight, amount));
+    const amount =
+      progress <= 0.5
+        ? progress * 2
+        : (progress - 0.5) * 2;
 
-    // 시간 흐름의 대부분을 교차 구간으로 사용한다. 밤→낮에서는 같은 계산을
-    // 역방향으로 지나가므로 저녁 이미지가 동일하게 부드럽게 사라진다.
-    const rawEveningBlend = Phaser.Math.Clamp((progress - 0.08) / 0.84, 0, 1);
-    const eveningBlend = rawEveningBlend * rawEveningBlend * (3 - 2 * rawEveningBlend);
+    this.baseMap.setTint(
+      Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.IntegerToColor(first.baseTint),
+        Phaser.Display.Color.IntegerToColor(second.baseTint),
+        100,
+        Math.round(amount * 100)
+      ).color
+    );
+
+    this.darkness.setAlpha(
+      Phaser.Math.Linear(
+        first.darkness,
+        second.darkness,
+        amount
+      )
+    );
+
+    this.sunlight.setAlpha(
+      Phaser.Math.Linear(
+        first.sunlight,
+        second.sunlight,
+        amount
+      )
+    );
+
+    const rawEveningBlend = Phaser.Math.Clamp(
+      (progress - 0.08) / 0.84,
+      0,
+      1
+    );
+
+    const eveningBlend =
+      rawEveningBlend *
+      rawEveningBlend *
+      (3 - 2 * rawEveningBlend);
+
     this.eveningMap.setAlpha(eveningBlend);
   }
 }

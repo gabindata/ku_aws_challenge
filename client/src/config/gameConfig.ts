@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { MainMenuScene } from '../scenes/MainMenuScene';
+import { TutorialScene } from '../scenes/TutorialScene';
 import { StageSelectScene } from '../scenes/StageSelectScene';
 import { NegotiationScene1 } from '../scenes/NegotiationScene1';
 import { NegotiationScene2 } from '../scenes/NegotiationScene2';
@@ -43,6 +44,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     BootScene,
     PreloadScene,
     MainMenuScene,
+    TutorialScene,
     StageSelectScene,
     NegotiationScene1,
     NegotiationScene2,

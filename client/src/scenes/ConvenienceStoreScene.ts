@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
+import { BackButton } from '../ui/BackButton';
 
 interface BlockedArea {
   name: string;
@@ -148,6 +149,14 @@ export class ConvenienceStoreScene extends Phaser.Scene {
     this.createCollisionAreas(
       width,
       height
+    );
+
+    // 뒤로가기 버튼
+    new BackButton(
+      this,
+      () => {
+        this.scene.start(SceneKey.StageSelect);
+      }
     );
   }
 

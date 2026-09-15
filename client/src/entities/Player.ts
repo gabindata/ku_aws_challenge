@@ -22,10 +22,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     x: number,
     y: number,
     texture: string,
-    scale: number
+    scale: number,
+    speed: number = 300
 
   ) {
     super(scene, x, y, texture);
+
+    this.speed = speed;
 
     scene.add.existing(this);
     scene.physics.add.existing(this);

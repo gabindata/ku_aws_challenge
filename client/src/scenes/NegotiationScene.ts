@@ -15,7 +15,8 @@ export class NegotiationScene extends Phaser.Scene {
   /** 플레이어 발화 1턴 처리: STT 결과 → /turn → 화면 갱신 → TTS */
   private async handlePlayerUtterance(_playerText: string): Promise<void> {
     // TODO: 응답 대기 동안 NPC "생각 중" 모션으로 지연을 가린다 (설계 문서 7장)
-    // TODO: dealClosed === true 면 더 이상 턴을 보내지 않고 ResultScene으로 전환
+    // TODO: outcome !== 'in_progress' 면 더 이상 턴을 보내지 않고 ResultScene으로 전환
+    //       (종료 응답에 styleReport가 함께 실려 온다)
     this.scene.start(SceneKey.Result);
   }
 }

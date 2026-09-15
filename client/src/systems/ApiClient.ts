@@ -6,13 +6,20 @@ import type {
   TurnRequest,
   TurnResponse,
 } from '../types';
-import type { StyleAnalysisRequest, StyleAnalysisResponse } from '../types';
 
 /**
- * 백엔드 통신 (설계 문서 5장 계약).
- * 백엔드가 아직 없을 때는 USE_MOCK=true로 두고 같은 형태의 더미 응답으로 붙여본다.
+ * 백엔드 통신. 요청/응답 형태는 shared/types/negotiationTypes.ts가 단일 소스다.
+ * 백엔드가 아직 없을 때는 USE_MOCK으로 같은 형태의 더미를 쓴다.
  */
 const USE_MOCK = false;
+
+/**
+ * 요청 식별자. 같은 requestId로 재전송하면 서버가 저장된 결과를 그대로 돌려준다.
+ * 네트워크 오류로 재시도할 때는 반드시 같은 값을 다시 보내야 턴이 중복 소비되지 않는다.
+ */
+export function newRequestId(): string {
+  return crypto.randomUUID();
+}
 
 async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -31,22 +38,26 @@ export async function getStages(): Promise<StagesResponse> {
   return res.json() as Promise<StagesResponse>;
 }
 
-export function startNegotiation(npcId: string): Promise<StartResponse> {
-  return post<StartRequest, StartResponse>('/negotiation/start', { npcId });
+export function startNegotiation(stageId: number, requestId = newRequestId()) {
+  return post<StartRequest, StartResponse>('/negotiation/start', { stageId, requestId });
 }
 
-export function sendTurn(sessionId: string, playerText: string): Promise<TurnResponse> {
-  return post<TurnRequest, TurnResponse>('/negotiation/turn', { sessionId, playerText });
+export function sendTurn(sessionId: string, playerText: string, requestId = newRequestId()) {
+  return post<TurnRequest, TurnResponse>('/negotiation/turn', {
+    sessionId,
+    playerText,
+    requestId,
+  });
 }
 
-export function getStyleReport(sessionId: string): Promise<StyleAnalysisResponse> {
-  return post<StyleAnalysisRequest, StyleAnalysisResponse>('/analysis/style', { sessionId });
-}
+// 말투 리포트는 별도 호출이 아니라 종료 응답(TurnResponse.styleReport)에 함께 실린다.
+// ResultScene이 그 값을 StyleReportScene으로 넘기면 된다.
 
 function mockStages(): StagesResponse {
   return [
-    { stageId: 1, npcId: 'merchant_kim', name: '시장 상인 김씨', difficulty: 'easy' },
-    { stageId: 2, npcId: 'car_dealer_park', name: '중고차 딜러 박씨', difficulty: 'normal' },
-    { stageId: 3, npcId: 'lawyer_lee', name: '계약 담당자 이변호사', difficulty: 'hard' },
+    {
+      stageId: 1, npcId: 'store_owner_yang', npcName: '양점장',
+      location: '동네 편의점', difficulty: 'easy', unlocked: true, recommended: true,
+    },
   ];
 }

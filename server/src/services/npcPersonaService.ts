@@ -1,74 +1,72 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Difficulty, StageSummary } from '../../../shared/types/negotiationTypes';
+import type { StageSummary } from '../../../shared/types/negotiationTypes';
+import { validateStage, type StageDefinition } from '../data/stageSchema';
 
-/** data/npcPersonas/*.json 의 스키마. 기획 담당이 채우는 파일. */
-export interface NpcPersona {
-  id: string;
-  name: string;
-  tone: string;
-  goal: {
-    item: string;
-    floorPrice: number;
-    targetPrice: number;
-  };
-  resistancePoints: string[];
-  successCriteria: string;
-  /** 스테이지 순서/난이도 (MainMenuScene 목록 정렬용) */
-  stageId: number;
-  difficulty: Difficulty;
-}
+// __dirname 기준이라 터미널을 어디서 실행하든 안전하다.
+const STAGE_DIR = path.join(__dirname, '..', 'data', 'npcPersonas');
 
-// __dirname = 지금 이 파일이 있는 폴더(src/services)의 절대 경로.
-// 상대경로('./data/...')를 쓰면 "터미널을 어느 폴더에서 실행했는가"에 따라
-// 경로가 달라져서 깨진다. 항상 이 파일 위치를 기준으로 잡는다.
-const PERSONA_DIR = path.join(__dirname, '..', 'data', 'npcPersonas');
+/** "권장 시작"을 표시할 stageId */
+const RECOMMENDED_STAGE_ID = 1;
 
 /**
- * npcPersonas/ 폴더를 읽어서 페르소나를 로드한다.
- * 파일이 몇 개 있든 코드 변경 없이 반영되어야 한다 (설계 문서 4장).
+ * npcPersonas/ 폴더를 읽어 스테이지 정의를 로드한다.
+ * 파일이 몇 개 있든 코드 변경 없이 반영된다.
  *
- * 매 호출마다 파일을 다시 읽는다 — 파일이 3개뿐이라 비용이 없고,
- * 기획 담당이 JSON을 추가하면 서버 재시작 없이 바로 반영되는 이점이 크다.
+ * 매 호출마다 다시 읽는다 — 기획 담당이 JSON을 추가하면 서버 재시작 없이 반영된다.
  */
-export function loadAllPersonas(): NpcPersona[] {
-  // 폴더 안의 파일 이름 목록. .DS_Store 같은 게 섞이므로 .json만 추린다.
-  const fileNames = fs.readdirSync(PERSONA_DIR).filter((f) => f.endsWith('.json'));
+export function loadAllStages(): StageDefinition[] {
+  const fileNames = fs.readdirSync(STAGE_DIR).filter((f) => f.endsWith('.json'));
 
-  const personas: NpcPersona[] = [];
+  const stages: StageDefinition[] = [];
   for (const fileName of fileNames) {
-    const raw = fs.readFileSync(path.join(PERSONA_DIR, fileName), 'utf-8');
+    const raw = fs.readFileSync(path.join(STAGE_DIR, fileName), 'utf-8');
+    let parsed: unknown;
     try {
-      // JSON.parse: 파일에서 읽은 "문자열"을 실제 객체로 바꾼다.
-      // `as NpcPersona`는 TS에게 모양을 알려줄 뿐 실제 검증은 하지 않는다.
-      personas.push(JSON.parse(raw) as NpcPersona);
+      parsed = JSON.parse(raw);
     } catch {
       // 파일 하나가 깨져도 나머지는 살린다.
-      // 전체를 감쌌다면 기획 담당의 쉼표 하나 때문에 스테이지 목록이 통째로 죽는다.
-      console.warn(`[persona] ${fileName} JSON 문법 오류 — 건너뜁니다`);
+      console.error(`[stage] ${fileName} JSON 문법 오류 — 로드하지 않습니다`);
+      continue;
     }
+
+    // 필수 필드가 빠진 스테이지는 로드하지 않는다 (공통규칙 §5).
+    // 통과시키면 결과 화면 문구가 조용히 undefined로 비어 플레이 중에야 드러난다.
+    const problems = validateStage(parsed);
+    if (problems.length > 0) {
+      console.error(`[stage] ${fileName} 필수 필드 누락 — 로드하지 않습니다`);
+      for (const p of problems) console.error(`  - ${p}`);
+      continue;
+    }
+
+    stages.push(parsed as StageDefinition);
   }
 
-  // 스테이지 순서대로(1 → 2 → 3). 빼서 음수면 a가 앞으로 오는 게 sort의 관례.
-  return personas.sort((a, b) => a.stageId - b.stageId);
+  return stages.sort((a, b) => a.stageId - b.stageId);
 }
 
-export function getPersona(npcId: string): NpcPersona | undefined {
-  return loadAllPersonas().find((p) => p.id === npcId);
+export function getStage(stageId: number): StageDefinition | undefined {
+  return loadAllStages().find((s) => s.stageId === stageId);
 }
 
 /**
- * GET /api/stages 응답 형태로 변환.
+ * GET /api/stages 응답. 월드맵 표시에 필요한 값만 고른다.
  *
- * 중요: 페르소나를 통째로 내보내지 않고 4개 필드만 고른다.
- * floorPrice(NPC가 수용하는 최저가)는 게임의 정답이라서,
- * 프론트로 나가면 브라우저 개발자도구에서 그대로 보인다.
+ * agreementDefinitions에는 판정 기준표와 비공개 요구가 들어 있으므로
+ * StageDefinition을 통째로 내보내지 않는다.
+ *
+ * 해금 여부는 클라이언트가 로컬 저장소에 보관한 월드 상태 키로 판정한다.
+ * 공통규칙 §3에 따라 이 저장은 클라이언트를 신뢰하는 구조이며,
+ * 조작 방지는 MVP 범위 밖이다.
  */
-export function listStages(): StageSummary[] {
-  return loadAllPersonas().map((p) => ({
-    stageId: p.stageId,
-    npcId: p.id,
-    name: p.name,
-    difficulty: p.difficulty,
+export function listStages(worldStateKeys: string[] = []): StageSummary[] {
+  return loadAllStages().map((s) => ({
+    stageId: s.stageId,
+    npcId: s.npcId,
+    npcName: s.npcName,
+    location: s.location,
+    difficulty: s.difficulty,
+    unlocked: (s.unlockRequirements ?? []).every((r) => worldStateKeys.includes(r)),
+    recommended: s.stageId === RECOMMENDED_STAGE_ID,
   }));
 }

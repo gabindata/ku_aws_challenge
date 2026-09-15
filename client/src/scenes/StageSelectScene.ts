@@ -210,7 +210,7 @@ export class StageSelectScene extends Phaser.Scene {
     ) {
       switch (this.nearbyNpcId) {
         case 'manager_yang':
-          this.scene.start(SceneKey.Negotiation1, {
+          this.scene.start(SceneKey.ConvenienceStore, {
             npcId: this.nearbyNpcId,
           });
           break;

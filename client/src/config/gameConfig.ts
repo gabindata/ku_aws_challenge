@@ -8,6 +8,7 @@ import { NegotiationScene2 } from '../scenes/NegotiationScene2';
 import { NegotiationScene3 } from '../scenes/NegotiationScene3';
 import { ResultScene } from '../scenes/ResultScene';
 import { StyleReportScene } from '../scenes/StyleReportScene';
+import { ConvenienceStoreScene } from '../scenes/ConvenienceStoreScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -46,6 +47,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     NegotiationScene1,
     NegotiationScene2,
     NegotiationScene3,
+    ConvenienceStoreScene,
     ResultScene,
     StyleReportScene,
   ],

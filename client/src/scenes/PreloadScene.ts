@@ -28,6 +28,12 @@ export class PreloadScene extends Phaser.Scene {
       'stage1-bg',
       'assets/images/stage1/convenience-store-bg.png'
     );
+
+    // 편의점 내부
+    this.load.image(
+      'convenience-store-interior',
+      'assets/images/stage1/convenience-store-interior.png'
+    );
     
     this.load.image(
       'manager-yang',

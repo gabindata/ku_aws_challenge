@@ -29,6 +29,28 @@ export class PreloadScene extends Phaser.Scene {
       'assets/images/stage1/convenience-store-bg.png'
     );
 
+    // 스테이지2 리소스
+    this.load.image(
+      'stage2-bg',
+      'assets/images/stage2/stage2-bg.png'
+    );
+
+    this.load.image(
+      'assistant-han',
+      'assets/images/stage2/assistant-han.png'
+    );
+
+    // 스테이지3 리소스
+    this.load.image(
+      'stage3-bg',
+      'assets/images/stage3/stage3-bg.png'
+    );
+
+    this.load.image(
+      'seo-heejung',
+      'assets/images/stage3/seo-heejung.png'
+    );
+
     // 편의점 내부
     this.load.image(
       'convenience-store-interior',

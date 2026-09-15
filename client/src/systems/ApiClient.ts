@@ -38,8 +38,16 @@ export async function getStages(): Promise<StagesResponse> {
   return res.json() as Promise<StagesResponse>;
 }
 
-export function startNegotiation(stageId: number, requestId = newRequestId()) {
-  return post<StartRequest, StartResponse>('/negotiation/start', { stageId, requestId });
+/**
+ * 협상 시작. worldState는 로컬 저장소에 보관한 월드 상태 키 목록이다.
+ * 세션 중에는 바뀌지 않으므로 여기서 한 번만 보낸다.
+ */
+export function startNegotiation(
+  stageId: number,
+  worldState: string[] = [],
+  requestId = newRequestId(),
+) {
+  return post<StartRequest, StartResponse>('/negotiation/start', { stageId, requestId, worldState });
 }
 
 export function sendTurn(sessionId: string, playerText: string, requestId = newRequestId()) {

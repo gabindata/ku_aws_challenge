@@ -48,12 +48,31 @@ export interface Session {
   /** requestId → 그때 돌려준 응답. 재전송이면 재실행하지 않고 이 값을 반환한다. */
   processedRequests: Map<string, NegotiationView>;
 
+  /** 세션 시작 시점에 받은 월드 상태 키. NPC 대사 참조에만 쓴다. */
+  worldStateKeys: string[];
+
   createdAtMs: number;
   /** 다음 메시지 id 번호. msg_01, msg_02 ... */
   nextTurnSeq: number;
 }
 
 const sessions = new Map<string, Session>();
+
+/**
+ * 세션 생성 요청의 멱등성.
+ *
+ * /turn은 세션 안에 응답을 기록하면 되지만 /start는 아직 세션이 없다.
+ * 재전송으로 세션이 두 개 생기면 플레이어의 진행이 갈라지므로 별도로 기억한다.
+ */
+const startResponses = new Map<string, unknown>();
+
+export function getStartResponse<T>(requestId: string): T | undefined {
+  return startResponses.get(requestId) as T | undefined;
+}
+
+export function rememberStartResponse(requestId: string, response: unknown): void {
+  startResponses.set(requestId, response);
+}
 
 function newSessionId(): string {
   let id: string;
@@ -69,6 +88,7 @@ export interface CreateSessionInput {
   requiredAgreementKeys: string[];
   /** null이면 시간 제한 없음(튜토리얼) */
   timeLimitSeconds: number | null;
+  worldStateKeys?: string[];
 }
 
 /**
@@ -106,6 +126,7 @@ export function createSession(input: CreateSessionInput): Session {
     repairRequestCount: 0,
     styleSignals: [],
     processedRequests: new Map(),
+    worldStateKeys: input.worldStateKeys ?? [],
     createdAtMs: Date.now(),
     nextTurnSeq: 1,
   };

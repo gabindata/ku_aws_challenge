@@ -254,6 +254,14 @@ export interface IdempotentRequest {
 /** POST /api/negotiation/start */
 export interface StartRequest extends IdempotentRequest {
   stageId: number;
+  /**
+   * 플레이어가 보유한 월드 상태 키. 클라이언트 로컬 저장소에서 온다.
+   *
+   * 세션 중에는 바뀌지 않으므로 시작할 때 한 번만 받아 세션에 보관한다.
+   * 서버는 이 값을 스테이지가 worldStateReferences로 선언한 키와 교집합해
+   * NPC 대사용으로만 프롬프트에 넣는다. 판정에는 닿지 않는다 (공통규칙 §5).
+   */
+  worldState?: string[];
 }
 export interface StartResponse extends NegotiationView {
   sessionId: string;

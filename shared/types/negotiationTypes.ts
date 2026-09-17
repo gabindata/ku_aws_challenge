@@ -103,13 +103,44 @@ export type StageVerdict = 'continue' | 'success' | 'fatal';
 
 export interface FatalBehaviorSignal {
   detected: boolean;
-  /** 명시적 협박 / 심한 욕설·직접 모욕 / 확인 뒤에도 유지되는 명백한 사기 */
-  type: 'threat' | 'abuse' | 'fraud' | null;
+  /**
+   * threat        NPC를 향한 명시적 협박
+   * abuse         NPC를 향한 심한 욕설·직접 모욕
+   * fraud         확인 뒤에도 유지되는 명백한 사기
+   * harm_pressure 해를 예고해 요구를 관철하려는 압박 (자해·죽음 예고, 타인 위해,
+   *               민폐·기물 훼손 예고). "안 들어주면 → 이런 일을 하겠다"는 조건
+   *               구조일 때만이며, 힘들다거나 사정을 설명하는 것은 해당하지 않는다.
+   *               (코드명은 기획 문서에 없어 임의로 정함)
+   */
+  type: 'threat' | 'abuse' | 'fraud' | 'harm_pressure' | null;
   evidenceTurnIds: string[];
+}
+
+/** LLM이 이번 npcReply에서 실제로 안내·변경·철회한 항목 */
+export interface DisclosureUpdate {
+  status: 'active' | 'withdrawn';
+  /** 이번 대사에 근거한 최신 안내 내용 */
+  summary: string;
+}
+
+/**
+ * 세션에 보존하는 안내 기록 (공통규칙 §8 「안내 기록 보존」).
+ *
+ * 최근 6왕복 밖으로 밀려도 지우지 않는다. 오래전 안내에 대한 지연된 동의를
+ * 판정하려면 그 안내의 원문과 근거 메시지가 남아 있어야 하기 때문이다.
+ * 안내됐다는 이유로 합의를 성립시키지 않으며, 브라우저로 보내지 않는다.
+ */
+export interface DisclosedFact {
+  status: 'active' | 'withdrawn';
+  summary: string;
+  npcMessageId: string;
+  npcMessageText: string;
 }
 
 export interface LlmTurnOutput {
   npcReply: string;
+  /** 변화가 없으면 빈 객체. 스테이지의 disclosureDefinitions에 선언된 키만 받는다. */
+  disclosureUpdates: Record<string, DisclosureUpdate>;
   /** 영향을 받은 키만 담는다. 생략된 키는 서버가 keep으로 처리한다. */
   judgements: Record<string, AgreementJudgement>;
   stageVerdict: StageVerdict;
@@ -162,42 +193,19 @@ export interface AgreementMemoItem {
   text: string;
 }
 
-/** 스테이지 전용 서사 보상. 성공 응답에만 실린다. */
-export interface StageEpilogue {
-  clueId: string;
-  text: string;
-}
-
-/** 결과 화면과 말투 리포트를 닫았을 때의 이동 */
+/** 결과 화면을 닫았을 때의 이동 */
 export type FailureCloseBehavior = 'world_map' | 'restart';
 
-/**
- * 종료 응답에만 실린다.
- * 종료 시점에는 LLM을 호출하지 않으므로 전부 스테이지 정의에서 가져온 고정값이다.
- *
- * 화면 순서: failureText → outcomeText 또는 hintText → 합의 메모 → fixedTerms
- *            → epilogue → 말투 리포트
- */
-export interface NegotiationResult {
+/** 성공 시 클라이언트가 로컬 저장소에 반영할 것. 최초 성공 한 번만 적용한다. */
+export interface NegotiationRewards {
+  successState: string;
+  completeQuests: string[];
+  addQuests: string[];
   /**
-   * 모든 실패 화면 상단에 endReason과 무관하게 먼저 표시한다.
-   * 스테이지가 정의하지 않았으면 null이고, 그때는 종료 이유 문구부터 표시한다.
-   * 서사적으로 무거운 결말을 담더라도 월드 상태로 저장하지 않는다. 실패는 연출이다.
+   * 단서. 결과 화면에 후일담 영역으로 표시하지 않고 저장만 한다.
+   * 같은 성공 응답을 다시 받아도 clueId로 중복을 걸러야 한다.
    */
-  failureText: string | null;
-  /** success면 successText, failure/limit면 limitText. 그 외에는 null. */
-  outcomeText: string | null;
-  /**
-   * 협상으로 얻은 것이 아니라 원래 정해져 있던 조건.
-   * 성공 화면에서 합의 내용과 시각적으로 구분해 표시한다. 성공일 때만 채운다.
-   */
-  fixedTerms: string[];
-  /** 성공 시 클라이언트가 저장할 월드 상태 키. 최초 성공 한 번만 적용한다. */
-  successState: string | null;
-  /** 성공 응답에만 실린다. 실패·수정 재요청 응답에는 넣지 않는다. */
-  epilogue: StageEpilogue | null;
-  /** 기본 world_map. restart면 맵 이동 없이 같은 스테이지의 새 세션을 시작한다. */
-  onClose: FailureCloseBehavior;
+  clues: { clueId: string; text: string }[];
 }
 
 /**
@@ -216,11 +224,27 @@ export interface NegotiationView {
   agreementMemo: AgreementMemoItem[];
   expressionKey: string;
   /**
-   * 종료 응답에서만 값을 가진다. 진행 중에는 null.
+   * 시간 초과 종료에서만 값을 가진다. 그 외에는 null.
    * 서버가 스테이지의 failureHints에서 고른 비정답형 문장이며 LLM 판단을 쓰지 않는다.
    */
   hintText: string | null;
-  result?: NegotiationResult;
+
+  // ── 종료 응답 전용 (공통규칙 §9). 적용되지 않는 문구는 null ──
+
+  /** 성공 시. "성공!" 아래 한 문장 */
+  successText?: string | null;
+  /** 실패 시 모든 종료 이유에 공통으로 상단에 표시. 스테이지가 정의하지 않았으면 null */
+  failureText?: string | null;
+  /** 호출 상한 종료 시 */
+  limitText?: string | null;
+  /** 성공 시에만. 화면에 표시하지 않고 로컬 저장소에 반영한다. */
+  rewards?: NegotiationRewards | null;
+  /**
+   * 결과 화면을 닫았을 때의 이동. 공통규칙 §9의 종료 응답 필드 목록에는 없지만
+   * 튜토리얼의 "다시 하기만" 화면을 그리려면 클라이언트가 알아야 해서 싣는다.
+   */
+  onClose?: FailureCloseBehavior;
+  /** 성공·실패 공통 */
   styleReport?: StyleReport;
 }
 
@@ -243,9 +267,8 @@ export interface StageSummary {
 export type StagesResponse = StageSummary[];
 
 /**
- * 같은 requestId가 재전송되면 서버는 상태를 다시 바꾸지 않고 최초 응답을 반환한다.
+ * 같은 requestId는 다시 처리하지 않고 최초 응답을 반환한다. 처리 중이면 그 결과를 기다린다.
  * 종료된 세션에 새 요청이 오면 저장된 종료 결과를 반환한다.
- * 네트워크 오류로 재시도할 때는 반드시 같은 값을 다시 보낸다.
  */
 export interface IdempotentRequest {
   requestId: string;
@@ -267,14 +290,20 @@ export interface StartResponse extends NegotiationView {
   sessionId: string;
 }
 
-/**
- * POST /api/negotiation/turn
- *
- * messageId는 서버가 발급한다. 근거 ID 검증이 클라이언트가 보낸 값에
- * 의존하면 검증의 의미가 없기 때문이다.
- */
+/** POST /api/negotiation/turn */
 export interface TurnRequest extends IdempotentRequest {
   sessionId: string;
+  /**
+   * 발화 식별자. requestId는 그 발화의 처리 시도 식별자다 (공통규칙 §3).
+   *
+   * - 새 발화는 두 ID를 새로 발급한다
+   * - 응답을 못 받아 처리 여부를 모르면 같은 messageId·requestId로 재전송한다
+   * - retry / system을 받은 뒤에는 같은 messageId에 새 requestId로 다시 시도한다
+   * - 같은 messageId로 발화 내용을 바꾸면 거부된다
+   *
+   * 서버는 이 값을 대화 기록의 플레이어 메시지 id로 쓰고 evidenceTurnIds 검증에 사용한다.
+   */
+  messageId: string;
   /** STT 결과 텍스트. 빈 문자열은 합의 상태를 바꾸지 않는다. */
   playerText: string;
 }

@@ -14,11 +14,19 @@ import type {
 const USE_MOCK = false;
 
 /**
- * 요청 식별자. 같은 requestId로 재전송하면 서버가 저장된 결과를 그대로 돌려준다.
- * 네트워크 오류로 재시도할 때는 반드시 같은 값을 다시 보내야 턴이 중복 소비되지 않는다.
+ * 발화 식별자와 처리 시도 식별자 (공통규칙 §3).
+ *
+ * - 새 발화: newMessageId()와 newRequestId()를 둘 다 새로 만든다
+ * - 응답을 못 받아 처리 여부를 모를 때: 같은 messageId·requestId·발화 내용으로 재전송
+ * - outcome이 retry일 때: 같은 messageId·발화 내용에 requestId만 새로 만든다
+ * - 발화 내용을 고쳤다면: 새 발화로 보고 두 ID를 새로 만든다 (같은 ID로 내용을 바꾸면 409)
  */
 export function newRequestId(): string {
   return crypto.randomUUID();
+}
+
+export function newMessageId(): string {
+  return `msg_${crypto.randomUUID()}`;
 }
 
 async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
@@ -50,16 +58,22 @@ export function startNegotiation(
   return post<StartRequest, StartResponse>('/negotiation/start', { stageId, requestId, worldState });
 }
 
-export function sendTurn(sessionId: string, playerText: string, requestId = newRequestId()) {
+export function sendTurn(input: {
+  sessionId: string;
+  messageId: string;
+  playerText: string;
+  requestId?: string;
+}) {
   return post<TurnRequest, TurnResponse>('/negotiation/turn', {
-    sessionId,
-    playerText,
-    requestId,
+    sessionId: input.sessionId,
+    messageId: input.messageId,
+    playerText: input.playerText,
+    requestId: input.requestId ?? newRequestId(),
   });
 }
 
-// 말투 리포트는 별도 호출이 아니라 종료 응답(TurnResponse.styleReport)에 함께 실린다.
-// ResultScene이 그 값을 StyleReportScene으로 넘기면 된다.
+// 종료 응답에 successText·failureText·limitText·hintText·rewards·styleReport가 함께 실린다.
+// 결과 화면에는 합의 메모·고정 안내·후일담을 표시하지 않는다. rewards는 로컬 저장소에만 반영한다.
 
 function mockStages(): StagesResponse {
   return [

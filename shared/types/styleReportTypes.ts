@@ -28,10 +28,12 @@ export interface StyleSignals {
   formality: FormalityLevel | null;
   /** 공손함이나 쿠션 표현의 양을 직접성 판정에 섞지 않는다. */
   directness: DirectnessLevel | null;
-  /** 한 발화에 여러 개가 있어도 사용한 발화 1개로 센다. */
-  cushionUsed: boolean;
-  /** 사용했다면 근거가 된 실제 표현. 단어의 존재만으로 판정하지 않는다. */
-  cushionPhrases: string[];
+  /**
+   * 한 발화에 여러 개가 있어도 사용한 발화 1개로 센다.
+   * used가 true면 근거가 된 실제 표현을 expressions에 반드시 넣는다.
+   * 단어의 존재만으로 판정하지 않고 부탁을 부드럽게 하는 용도인지 본다.
+   */
+  cushion: { used: boolean; expressions: string[] };
   /** 화면에 표시하지 않는다. 근거 발화 선정과 총평 작성의 보조자료로만 쓴다. */
   stageTags: string[];
   evidenceTurnId: string;
@@ -132,6 +134,9 @@ export interface StyleReport {
   /** 집계에 쓴 유효 발화 수. 화면에 표시하지 않는다. */
   validUtteranceCount: number;
 }
+
+/** 말투 이름 앞에 항상 붙는 한정. 이름 자체에는 넣지 않고 화면이 붙인다. */
+export const STYLE_TITLE_PREFIX = '이번 대화의 말투';
 
 export const ANALYSIS_FAILED_NOTE = '대화 분석을 불러오지 못했습니다';
 export const LOW_SAMPLE_NOTE = '말이 적어 이번엔 읽을 게 많지 않습니다.';

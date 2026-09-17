@@ -7,8 +7,13 @@
 import type {
   Difficulty,
   FailureCloseBehavior,
-  StageEpilogue,
 } from '../../../shared/types/negotiationTypes';
+
+/** 스테이지 전용 서사 데이터. 결과 화면에는 표시하지 않고 단서 본문으로만 쓴다. */
+export interface StageEpilogue {
+  clueId: string;
+  text: string;
+}
 
 /**
  * 합의 키 하나의 판정 기준표. 수치 비교값이 아니라 LLM이 읽는 자연어다.
@@ -25,8 +30,15 @@ export interface AgreementDefinition {
   clarifyWhen: string[];
   /** 이전 약속과 충돌하거나 철회하는 의미 */
   revokeWhen: string[];
-  /** 직전 NPC 제안에 대한 짧은 "네"를 인정할지 */
+  /** NPC 제안에 대한 맥락상 동의를 성립으로 인정할지 */
   contextConsentAllowed: boolean;
+  /**
+   * 맥락 동의의 앵커로 허용할 NPC 메시지 범위. contextConsentAllowed가 true일 때만 쓴다.
+   * immediate(기본) — 직전 NPC 메시지만
+   * session         — 현재 플레이어 발화보다 앞선 같은 세션의 NPC 메시지 전부.
+   *                   "아까 안내한 서류는 제가 쓸게요" 같은 지연된 수락용
+   */
+  contextAnchorScope?: 'immediate' | 'session';
   /**
    * 플레이어가 스스로 약속을 제안해야 충족되는 키인지.
    * 공통규칙이 정한 유일한 이름이다 (selfProposalRequired 같은 다른 이름을 쓰지 않는다).
@@ -86,18 +98,12 @@ export interface StageDefinition {
   failureHints: Record<string, string>;
 
   styleReportConfig: {
-    /** 먼저 설명할 축. 공통 다섯 축을 삭제할 수는 없다. */
-    highlight: string[];
-    /** 추가 집계용 태그 화이트리스트. 밖의 값은 제외한다. */
-    allowedStageTags: string[];
     /**
-     * 태그 코드 -> 화면 표기.
-     *
-     * 공통규칙 §10이 "태그 코드명을 노출하지 않는다"고 정했는데 문서의 운영 JSON에는
-     * 코드명 배열만 있다. 각 스테이지 페이지의 "집계 대상" 열에 뜻이 적혀 있어
-     * 그걸 옮겨 담는다. 비어 있으면 코드명으로 대체된다. (기획 확인 필요 항목)
+     * 내부 분석용 태그 화이트리스트. 밖의 값은 제외한다.
+     * 저장·집계는 하지만 태그 영역·태그명·횟수는 화면에 표시하지 않는다.
+     * 근거 발화 선정과 협상 총평 작성의 보조자료로만 쓴다.
      */
-    stageTagLabels?: Record<string, string>;
+    allowedStageTags: string[];
   };
 
   successState: string;
@@ -132,7 +138,18 @@ export interface StageDefinition {
    * 저장값을 고쳐 스테이지를 뚫는 길이 열린다. 그래서 대사에서 멈춘다.
    */
   worldStateReferences?: Record<string, string>;
-  /** 스테이지 전용 서사 보상. 서버가 성공 결과를 구성할 때만 읽는다. */
+  /**
+   * 보존할 안내 항목 키 -> 의미. 생략하면 빈 객체다.
+   * 선언만으로 안내됐다고 보지 않는다. LLM이 실제로 안내한 대사를 근거로 기록한다.
+   */
+  disclosureDefinitions?: Record<string, string>;
+  /** 성공 시 클라이언트가 반영할 퀘스트·단서. clueIds의 본문은 successEpilogue에서 찾는다. */
+  successRewards?: {
+    completeQuests?: string[];
+    addQuests?: string[];
+    clueIds?: string[];
+  };
+  /** 스테이지 전용 서사 데이터. 결과 화면에 표시하지 않고 단서 본문으로만 쓴다. */
   successEpilogue?: StageEpilogue;
 }
 
@@ -142,6 +159,8 @@ export interface StageDefinition {
 export const MAX_LLM_CALLS_PER_SESSION = 40;
 /** 판정 호출 예산과 분리된 수정 재요청 상한. 세션 총 호출은 45회를 넘지 않는다. */
 export const MAX_REPAIR_REQUESTS_PER_SESSION = 5;
+/** 종료 후 리포트 생성. 최초 1회 + 재시도 1회. 세션 총 호출은 40 + 5 + 2 = 47회 */
+export const MAX_REPORT_CALLS_PER_SESSION = 2;
 /** 이 횟수에 도달하면 프롬프트에 nearCallLimit를 넣어 NPC가 서사적으로 압박한다 */
 export const NEAR_CALL_LIMIT_THRESHOLD = 35;
 
@@ -243,8 +262,32 @@ export function validateStage(raw: unknown): string[] {
   }
 
   const cfg = s.styleReportConfig as Record<string, unknown> | undefined;
-  if (!cfg || !Array.isArray(cfg.highlight) || !Array.isArray(cfg.allowedStageTags)) {
-    problems.push('styleReportConfig.highlight / allowedStageTags 누락');
+  if (!cfg || !Array.isArray(cfg.allowedStageTags)) {
+    problems.push('styleReportConfig.allowedStageTags 누락');
+  }
+
+  // contextAnchorScope는 두 값 중 하나여야 한다
+  for (const key of keys) {
+    const d = defs[key] as Record<string, unknown> | undefined;
+    const scope = d?.contextAnchorScope;
+    if (scope !== undefined && scope !== 'immediate' && scope !== 'session') {
+      problems.push(`agreementDefinitions.${key}.contextAnchorScope(${String(scope)})가 immediate·session이 아님`);
+    }
+  }
+
+  if (s.disclosureDefinitions !== undefined &&
+      (typeof s.disclosureDefinitions !== 'object' || s.disclosureDefinitions === null)) {
+    problems.push('disclosureDefinitions가 객체가 아님');
+  }
+
+  // 보상 단서는 본문이 있어야 한다. 없으면 단서 ID만 저장되고 내용이 비어 버린다.
+  const rewards = s.successRewards as Record<string, unknown> | undefined;
+  const clueIds = Array.isArray(rewards?.clueIds) ? (rewards!.clueIds as string[]) : [];
+  const epilogue = s.successEpilogue as Record<string, unknown> | undefined;
+  for (const id of clueIds) {
+    if (epilogue?.clueId !== id || typeof epilogue?.text !== 'string') {
+      problems.push(`successRewards.clueIds의 ${id}에 대응하는 successEpilogue 본문 없음`);
+    }
   }
 
   return problems;

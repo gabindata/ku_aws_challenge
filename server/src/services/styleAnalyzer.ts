@@ -67,7 +67,7 @@ export function buildAxes(playerTurns: Turn[], signals: StyleSignals[]): StyleAx
   const directCount = directnessValues.filter((d) => d === 'direct').length;
 
   // ③ 쿠션 표현 — 전체 유효 발화 대비 사용한 발화 수
-  const cushionCount = signals.filter((s) => s.cushionUsed).length;
+  const cushionCount = signals.filter((s) => s.cushion.used).length;
 
   // ④ 발화 길이 — 서버가 직접 계산
   const lengthSum = playerTurns.reduce((sum, t) => sum + normalizeForLength(t.text).length, 0);

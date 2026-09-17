@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type {
   AgreementState,
+  DisclosedFact,
   EndReason,
   NegotiationView,
   Outcome,
@@ -20,63 +21,69 @@ export interface Session {
   npcId: string;
   status: SessionStatus;
 
-  /** 대화 로그. turn.id가 evidenceTurnIds의 대상이다. */
+  /** 대화 기록. 플레이어 발화의 id는 클라이언트가 보낸 messageId다. */
   turns: Turn[];
-  /** 합의 키 → 현재 상태 */
   agreements: Record<string, AgreementState>;
+  /** 안내 기록. 최근 6왕복 밖으로 밀려도 지우지 않는다. */
+  disclosedFacts: Record<string, DisclosedFact>;
 
   outcome: Outcome;
   endReason: EndReason;
+  /** 종료가 확정된 뒤 저장한 응답. 이후 모든 요청은 이것을 그대로 받는다. */
+  endView: NegotiationView | null;
 
   // ── 타이머 (공통규칙 §4) ──
   timerStatus: TimerStatus;
-  /** 첫 대사의 추정 TTS가 끝나는 시각. 여기서부터 제한 시간을 센다. */
   startedAtMs: number | null;
   /** startedAt + 제한 시간 + 누적 인정 정지 시간. 정지가 쌓일 때마다 뒤로 밀린다. */
   deadlineAtMs: number | null;
   pausedTotalMs: number;
+  /** 서버 시계로 만료를 확인하는 예약. 마감이 밀리면 갈아 끼운다. */
+  expiryTimer: NodeJS.Timeout | null;
 
-  // ── 비용 상한 (공통규칙 §4) ──
-  /** 판정 호출 수. 상한 40 */
+  // ── 비용 상한 (공통규칙 §4) — 세 예산은 서로 분리된다 ──
+  /** 판정 호출. 상한 40. fatalRecovery로 되돌려도 차감된 채 유지한다. */
   llmCallCount: number;
-  /** 수정 재요청 수. 판정 호출과 예산이 분리된다. 상한 5 */
+  /** 수정 재요청. 상한 5 */
   repairRequestCount: number;
+  /** 종료 리포트 생성. 상한 2 */
+  reportCallCount: number;
 
-  /** 말투 리포트용 누적. 판정과 분리해 쌓는다. */
+  /** 리포트 집계용. 판정 상태와 분리해 쌓는다. */
   styleSignals: StyleSignals[];
-
-  /** requestId → 그때 돌려준 응답. 재전송이면 재실행하지 않고 이 값을 반환한다. */
-  processedRequests: Map<string, NegotiationView>;
-
-  /** 세션 시작 시점에 받은 월드 상태 키. NPC 대사 참조에만 쓴다. */
-  worldStateKeys: string[];
-  /**
-   * 종료 시 한 번만 만든 리포트.
-   * 결과를 다시 조회하거나 화면을 다시 그릴 때 새로 생성하지 않는다.
-   */
   styleReport: StyleReport | null;
 
+  // ── 멱등성 (공통규칙 §3) ──
+  /**
+   * requestId -> 그 처리 시도의 결과.
+   * 처리 중이면 Promise가 들어 있어, 같은 requestId가 다시 와도 LLM을 중복 호출하지 않고
+   * 같은 결과를 기다린다.
+   */
+  requests: Map<string, Promise<unknown>>;
+  /**
+   * messageId -> 발화 내용과 정상 반영된 결과.
+   * applied가 있으면 새 requestId로 와도 다시 처리하지 않는다.
+   * retry / system으로 끝난 시도는 applied를 남기지 않아 새 시도를 받는다.
+   */
+  messages: Map<string, { text: string; applied: NegotiationView | null }>;
+
+  worldStateKeys: string[];
   createdAtMs: number;
-  /** 다음 메시지 id 번호. msg_01, msg_02 ... */
-  nextTurnSeq: number;
+  /** NPC 메시지 id 번호. npc_01, npc_02 ... */
+  nextNpcSeq: number;
 }
 
 const sessions = new Map<string, Session>();
 
-/**
- * 세션 생성 요청의 멱등성.
- *
- * /turn은 세션 안에 응답을 기록하면 되지만 /start는 아직 세션이 없다.
- * 재전송으로 세션이 두 개 생기면 플레이어의 진행이 갈라지므로 별도로 기억한다.
- */
-const startResponses = new Map<string, unknown>();
+/** /start는 세션이 생기기 전이라 requestId를 세션 밖에 기억한다. */
+const startRequests = new Map<string, Promise<unknown>>();
 
-export function getStartResponse<T>(requestId: string): T | undefined {
-  return startResponses.get(requestId) as T | undefined;
-}
-
-export function rememberStartResponse(requestId: string, response: unknown): void {
-  startResponses.set(requestId, response);
+export function startRequest<T>(requestId: string, create: () => Promise<T>): Promise<T> {
+  const existing = startRequests.get(requestId) as Promise<T> | undefined;
+  if (existing) return existing;
+  const created = create();
+  startRequests.set(requestId, created);
+  return created;
 }
 
 function newSessionId(): string {
@@ -91,27 +98,14 @@ export interface CreateSessionInput {
   stageId: number;
   npcId: string;
   requiredAgreementKeys: string[];
-  /** null이면 시간 제한 없음(튜토리얼) */
   timeLimitSeconds: number | null;
   worldStateKeys?: string[];
 }
 
-/**
- * 세션 생성. 모든 필수 키를 unmet으로 깔아두고 상태를 ready로 둔다.
- *
- * 타이머는 여기서 시작하지 않는다. 공통규칙 §3에 따라
- * "응답 전송 시각 + 첫 대사의 추정 TTS 시간"을 startTimer()로 넘긴다.
- */
 export function createSession(input: CreateSessionInput): Session {
   const agreements: Record<string, AgreementState> = {};
   for (const key of input.requiredAgreementKeys) {
-    agreements[key] = {
-      status: 'unmet',
-      summary: null,
-      evidenceTurnIds: [],
-      lastAction: null,
-      updatedAtMs: null,
-    };
+    agreements[key] = { status: 'unmet', summary: null, evidenceTurnIds: [], lastAction: null, updatedAtMs: null };
   }
 
   const session: Session = {
@@ -121,151 +115,129 @@ export function createSession(input: CreateSessionInput): Session {
     status: 'ready',
     turns: [],
     agreements,
+    disclosedFacts: {},
     outcome: 'in_progress',
     endReason: null,
+    endView: null,
     timerStatus: input.timeLimitSeconds === null ? 'disabled' : 'paused',
     startedAtMs: null,
     deadlineAtMs: null,
     pausedTotalMs: 0,
+    expiryTimer: null,
     llmCallCount: 0,
     repairRequestCount: 0,
+    reportCallCount: 0,
     styleSignals: [],
-    processedRequests: new Map(),
-    worldStateKeys: input.worldStateKeys ?? [],
     styleReport: null,
+    requests: new Map(),
+    messages: new Map(),
+    worldStateKeys: input.worldStateKeys ?? [],
     createdAtMs: Date.now(),
-    nextTurnSeq: 1,
+    nextNpcSeq: 1,
   };
   sessions.set(session.sessionId, session);
   return session;
 }
 
-/** 없으면 undefined — 라우트가 404로 응답한다. 서버 재시작 후에는 정상적으로 자주 발생한다. */
 export function getSession(sessionId: string): Session | undefined {
   return sessions.get(sessionId);
 }
 
-/**
- * 대화 로그에 한 줄 추가하고 발급된 메시지 id를 돌려준다.
- * evidenceTurnIds가 이 id를 가리키므로 세션 안에서 절대 재사용하지 않는다.
- */
-export function appendTurn(
-  sessionId: string,
-  turn: Omit<Turn, 'id' | 'timestampMs'>,
-): Turn {
+// ── 세션별 직렬화 (공통규칙 §4) ──
+//
+// 발화 처리와 만료 확인이 같은 세션의 상태를 동시에 바꾸면 종료가 두 번 확정되거나
+// 리포트가 두 번 생성된다. 세션마다 작업을 한 줄로 세운다.
+
+const locks = new Map<string, Promise<unknown>>();
+
+export function withSessionLock<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
+  const previous = locks.get(sessionId) ?? Promise.resolve();
+  const next = previous.then(work, work);
+  locks.set(sessionId, next.catch(() => undefined));
+  return next;
+}
+
+// ── 대화 기록 ──
+
+export function appendPlayerTurn(sessionId: string, messageId: string, text: string): Turn {
+  const turn: Turn = { id: messageId, speaker: 'player', text, timestampMs: Date.now() };
+  requireSession(sessionId).turns.push(turn);
+  return turn;
+}
+
+export function appendNpcTurn(sessionId: string, text: string): Turn {
   const session = requireSession(sessionId);
-  const created: Turn = {
-    id: `msg_${String(session.nextTurnSeq).padStart(2, '0')}`,
+  const turn: Turn = {
+    id: `npc_${String(session.nextNpcSeq).padStart(2, '0')}`,
+    speaker: 'npc',
+    text,
     timestampMs: Date.now(),
-    ...turn,
   };
-  session.nextTurnSeq += 1;
-  session.turns.push(created);
-  return created;
+  session.nextNpcSeq += 1;
+  session.turns.push(turn);
+  return turn;
 }
 
-/** evidenceTurnIds 검증용. 해당 id가 이 세션의 플레이어 발화인지 확인한다. */
+/**
+ * 대화 기록에서 발화 하나를 뺀다. fatalRecovery와 retry / system에 쓴다.
+ *
+ * 판정 호출 수는 되돌리지 않는다 (공통규칙 §4). 되돌림을 반복해 세션 총 호출
+ * 47회 상한을 우회할 수 없게 하기 위해서다. 말투 신호는 호출부가 애초에 기록하지 않는다.
+ */
+export function removeTurn(sessionId: string, turnId: string): void {
+  const session = requireSession(sessionId);
+  session.turns = session.turns.filter((t) => t.id !== turnId);
+}
+
 export function findPlayerTurn(sessionId: string, turnId: string): Turn | undefined {
-  const session = requireSession(sessionId);
-  return session.turns.find((t) => t.id === turnId && t.speaker === 'player');
+  return requireSession(sessionId).turns.find((t) => t.id === turnId && t.speaker === 'player');
 }
 
-/** 직전 NPC 발화. contextAnchorTurnId 검증에 쓴다. */
-export function lastNpcTurn(sessionId: string): Turn | undefined {
-  const session = requireSession(sessionId);
-  for (let i = session.turns.length - 1; i >= 0; i -= 1) {
-    if (session.turns[i].speaker === 'npc') return session.turns[i];
+/** 플레이어 발화 직전의 NPC 메시지. contextAnchorScope: immediate 검증용 */
+export function npcTurnBefore(sessionId: string, playerTurnId: string): Turn | undefined {
+  const turns = requireSession(sessionId).turns;
+  const index = turns.findIndex((t) => t.id === playerTurnId);
+  for (let i = (index === -1 ? turns.length : index) - 1; i >= 0; i -= 1) {
+    if (turns[i].speaker === 'npc') return turns[i];
   }
   return undefined;
+}
+
+/** 플레이어 발화보다 앞선 NPC 메시지인가. contextAnchorScope: session 검증용 */
+export function isNpcTurnBefore(sessionId: string, npcTurnId: string, playerTurnId: string): boolean {
+  const turns = requireSession(sessionId).turns;
+  const npcIndex = turns.findIndex((t) => t.id === npcTurnId && t.speaker === 'npc');
+  const playerIndex = turns.findIndex((t) => t.id === playerTurnId);
+  return npcIndex !== -1 && playerIndex !== -1 && npcIndex < playerIndex;
+}
+
+/** 리포트 대상 유효 발화. 빈 STT·되돌린 발화·실패한 시도는 이미 빠져 있다. */
+export function playerTurns(session: Session): Turn[] {
+  return session.turns.filter((t) => t.speaker === 'player');
 }
 
 export function setAgreement(sessionId: string, key: string, state: AgreementState): void {
   requireSession(sessionId).agreements[key] = state;
 }
 
+export function setDisclosedFact(sessionId: string, key: string, fact: DisclosedFact): void {
+  requireSession(sessionId).disclosedFacts[key] = fact;
+}
+
 export function recordStyleSignals(sessionId: string, signals: StyleSignals): void {
   requireSession(sessionId).styleSignals.push(signals);
 }
 
-/** 판정 호출 1회 소모. 상한 도달 여부는 negotiationEngine이 판단한다. */
 export function incrementLlmCallCount(sessionId: string): number {
   const session = requireSession(sessionId);
   session.llmCallCount += 1;
   return session.llmCallCount;
 }
 
-/** 수정 재요청 1회 소모. 판정 호출 예산과 분리된다. */
-export function incrementRepairRequestCount(sessionId: string): number {
-  const session = requireSession(sessionId);
-  session.repairRequestCount += 1;
-  return session.repairRequestCount;
-}
+// ── 타이머 ──
 
-/**
- * reverted 처리 (공통규칙 §3).
- *
- * 치명적 발화를 종료 대신 되돌린다. 종료 우선순위상 fatal 판정이 합의 반영보다
- * 앞이므로 합의 상태는 아직 바뀌지 않았다. 되돌릴 것은 이 턴에 생긴 부수 효과뿐이다.
- *
- * - 대화 기록에서 해당 발화 제거
- * - 판정 호출 수 되돌리기
- * - 말투 신호는 호출부가 애초에 기록하지 않는다
- *
- * nextTurnSeq는 되돌리지 않는다. 제거된 id를 다시 발급하면 그 id를 가리키는
- * 참조가 남았을 때 엉뚱한 발화를 근거로 삼게 된다. 번호에 구멍이 나는 편이 안전하다.
- */
-export function revertTurn(sessionId: string, turnId: string): void {
-  const session = requireSession(sessionId);
-  session.turns = session.turns.filter((t) => t.id !== turnId);
-  session.llmCallCount = Math.max(0, session.llmCallCount - 1);
-}
-
-export function rememberStyleReport(sessionId: string, report: StyleReport): void {
-  requireSession(sessionId).styleReport = report;
-}
-
-/** 리포트 대상 유효 발화. 빈 STT와 되돌린 발화는 이미 기록에서 빠져 있다. */
-export function playerTurns(session: Session): Turn[] {
-  return session.turns.filter((t) => t.speaker === 'player');
-}
-
-export function endSession(sessionId: string, outcome: Outcome, endReason: EndReason): void {
-  const session = requireSession(sessionId);
-  session.outcome = outcome;
-  session.endReason = endReason;
-  session.status = 'ended';
-  session.timerStatus = 'paused';
-}
-
-// ── 멱등성 (공통규칙 §3) ──
-
-export function getProcessedResponse(
-  sessionId: string,
-  requestId: string,
-): NegotiationView | undefined {
-  return getSession(sessionId)?.processedRequests.get(requestId);
-}
-
-export function rememberResponse(
-  sessionId: string,
-  requestId: string,
-  view: NegotiationView,
-): void {
-  requireSession(sessionId).processedRequests.set(requestId, view);
-}
-
-// ── 타이머 조작 (공통규칙 §4) ──
-// 규칙 계산은 없고 상태만 바꾼다. 무엇을 얼마나 정지할지는 negotiationEngine이 정한다.
-
-/**
- * 첫 대사의 추정 TTS가 끝나는 시각부터 제한 시간을 센다.
- * 클라이언트의 "재생이 끝났다"는 보고는 받지 않는다.
- */
-export function startTimer(
-  sessionId: string,
-  startedAtMs: number,
-  timeLimitSeconds: number,
-): void {
+/** 첫 대사의 추정 TTS가 끝나는 시각부터 제한 시간을 센다. */
+export function startTimer(sessionId: string, startedAtMs: number, timeLimitSeconds: number): void {
   const session = requireSession(sessionId);
   session.status = 'in_progress';
   if (session.timerStatus === 'disabled') return;
@@ -276,27 +248,29 @@ export function startTimer(
 
 /**
  * 인정된 정지 시간만큼 마감을 뒤로 민다.
- *
- * 공통규칙 §4의 마감 스냅샷 규칙에 따라, 이번 요청을 처리하며 새로 인정된
- * 정지 시간은 다음 요청부터 적용된다. 이미 접수된 요청의 만료 판정에
- * 소급하지 않으므로 호출 시점은 판정이 끝난 뒤여야 한다.
+ * 이미 접수된 발화의 "접수 당시 유효성"에는 소급하지 않는다. 그건 접수 순간의
+ * 스냅샷으로만 본다. 처리 후 세션 만료는 이 최신 마감으로 판단한다.
  */
 export function extendDeadline(sessionId: string, pausedMs: number): void {
   const session = requireSession(sessionId);
-  if (session.deadlineAtMs === null) return;
+  if (session.deadlineAtMs === null || pausedMs <= 0) return;
   session.deadlineAtMs += pausedMs;
   session.pausedTotalMs += pausedMs;
 }
 
-/** 발화 접수 시점에 고정할 마감 스냅샷. 만료 판정은 이 값으로만 한다. */
-export function deadlineSnapshot(session: Session): number | null {
-  return session.deadlineAtMs;
-}
-
-/** 남은 시간(초). 시간 제한이 없으면 null. */
 export function remainingSeconds(session: Session): number | null {
   if (session.deadlineAtMs === null) return null;
   return Math.max(0, Math.ceil((session.deadlineAtMs - Date.now()) / 1000));
+}
+
+export function markEnded(sessionId: string, outcome: Outcome, endReason: EndReason): void {
+  const session = requireSession(sessionId);
+  session.outcome = outcome;
+  session.endReason = endReason;
+  session.status = 'ended';
+  session.timerStatus = 'paused';
+  if (session.expiryTimer) clearTimeout(session.expiryTimer);
+  session.expiryTimer = null;
 }
 
 function requireSession(sessionId: string): Session {

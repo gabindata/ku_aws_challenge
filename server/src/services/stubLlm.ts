@@ -21,6 +21,7 @@ import type { StageDefinition } from '../data/stageSchema';
  *   - 열 글자 이상 말하면  → 배열 순서상 첫 미충족 키를 confirm
  *   - 그보다 짧게 말하면   → 그 키를 clarify (NPC가 되묻는 흐름 확인용)
  *   - "협박테스트"를 넣으면 → stageVerdict: fatal (실패 화면 확인용)
+ *   - "실패테스트"를 넣으면 → LLM 오류 (retry / system 확인용)
  *
  * 필수 키를 전부 채우려면 충분히 긴 발화를 키 수만큼 하면 된다.
  */
@@ -28,6 +29,8 @@ import type { StageDefinition } from '../data/stageSchema';
 const MIN_CONFIRM_LENGTH = 10;
 /** 실패 화면을 확인하기 위한 개발용 문구. 진짜 LLM이 붙으면 사라진다. */
 export const FATAL_TEST_PHRASE = '협박테스트';
+/** retry / system 경로를 확인하기 위한 개발용 문구. 이 발화는 LLM 오류로 처리된다. */
+export const SYSTEM_ERROR_TEST_PHRASE = '실패테스트';
 
 const REPLIES = [
   '그렇게 적을게요.',
@@ -42,11 +45,16 @@ export function stubEvaluateTurn(
   playerText: string,
 ): LlmTurnOutput {
   const base = {
+    disclosureUpdates: {},
     stageVerdict: 'continue' as const,
     fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
     expressionKey: stage.defaultExpressionKey,
     styleSignals: fakeSignals(playerText, playerTurnId),
   };
+
+  if (playerText.includes(SYSTEM_ERROR_TEST_PHRASE)) {
+    throw new Error('(가짜) LLM 출력 오류');
+  }
 
   if (playerText.includes(FATAL_TEST_PHRASE)) {
     return {
@@ -121,8 +129,7 @@ function fakeSignals(playerText: string, playerTurnId: string): StyleSignals {
   return {
     formality,
     directness,
-    cushionUsed: found.length > 0,
-    cushionPhrases: found,
+    cushion: { used: found.length > 0, expressions: found },
     stageTags: [],
     evidenceTurnId: playerTurnId,
   };
@@ -143,8 +150,8 @@ export function stubNarrative(input: {
 }): StyleNarrative {
   const { playerTurns, signals, outcome } = input;
 
-  const cushionTurns = signals.filter((s) => s.cushionUsed);
-  const phrases = [...new Set(cushionTurns.flatMap((s) => s.cushionPhrases))];
+  const cushionTurns = signals.filter((s) => s.cushion.used);
+  const phrases = [...new Set(cushionTurns.flatMap((s) => s.cushion.expressions))];
   const formal = signals.filter((s) => s.formality === 'formal').length;
 
   const title = cushionTurns.length >= 2
@@ -166,7 +173,7 @@ export function stubNarrative(input: {
       highlights.push({
         turnId: turn.id,
         quote: turn.text,
-        note: `"${firstCushion.cushionPhrases[0]}" 같은 말을 ${cushionTurns.length}번 썼습니다.`,
+        note: `"${firstCushion.cushion.expressions[0]}" 같은 말을 ${cushionTurns.length}번 썼습니다.`,
       });
     }
   }

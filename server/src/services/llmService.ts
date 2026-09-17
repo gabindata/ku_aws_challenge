@@ -1,7 +1,7 @@
 import type { LlmTurnOutput, Turn } from '../../../shared/types/negotiationTypes';
 import type { StyleNarrative, StyleSignals } from '../../../shared/types/styleReportTypes';
 import type { Session } from '../models/session';
-import type { StageDefinition } from '../data/stageSchema';
+import { MAX_REPORT_CALLS_PER_SESSION, type StageDefinition } from '../data/stageSchema';
 import { stubEvaluateTurn, stubNarrative } from './stubLlm';
 
 /**
@@ -67,8 +67,6 @@ export const REPORT_TIMEOUT_MS = 15_000;
 /** 시스템 지침과 대화 자료를 포함한 전체 입력 기준 */
 export const REPORT_MAX_INPUT_TOKENS = 16_000;
 export const REPORT_MAX_OUTPUT_TOKENS = 2_000;
-/** 최초 1회 + 실패 시 재시도 1회 */
-export const REPORT_MAX_ATTEMPTS = 2;
 
 export interface NarrativeInput {
   stage: StageDefinition;
@@ -91,18 +89,19 @@ export interface NarrativeInput {
  * 판정 호출(4000토큰)과 예산이 분리된다.
  */
 export async function generateNarrative(input: NarrativeInput): Promise<StyleNarrative | null> {
-  for (let attempt = 1; attempt <= REPORT_MAX_ATTEMPTS; attempt += 1) {
+  const { session } = input;
+  while (session.reportCallCount < MAX_REPORT_CALLS_PER_SESSION) {
+    session.reportCallCount += 1;
+    const attempt = session.reportCallCount;
     try {
-      const raw = USE_STUB
-        ? stubNarrative(input)
-        : await callReportModel(input);
+      const raw = USE_STUB ? stubNarrative(input) : await callReportModel(input);
       // 근거 발화 ID가 이 세션의 리포트 대상 플레이어 발화인지 확인하고
       // 저장된 원문으로 교체한 뒤 시간순으로 배치한다.
       const verified = verifyNarrative(raw, input.playerTurns);
       if (verified) return verified;
-      console.warn(`[report] 형식 검증 실패 (${attempt}/${REPORT_MAX_ATTEMPTS})`);
+      console.warn(`[report] 형식 검증 실패 (${attempt}/${MAX_REPORT_CALLS_PER_SESSION})`);
     } catch (err) {
-      console.warn(`[report] 생성 실패 (${attempt}/${REPORT_MAX_ATTEMPTS})`, err);
+      console.warn(`[report] 생성 실패 (${attempt}/${MAX_REPORT_CALLS_PER_SESSION})`, err);
     }
   }
   return null;

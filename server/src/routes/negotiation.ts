@@ -5,7 +5,8 @@ import type {
   TurnResponse,
 } from '../../../shared/types/negotiationTypes';
 import { getStage, listStages } from '../services/npcPersonaService';
-import { evaluateTurn } from '../services/llmService';
+import { evaluateTurn, generateNarrative } from '../services/llmService';
+import { buildReport, silentSummary } from '../services/styleAnalyzer';
 import {
   activeWorldStateReferences,
   allRequiredMet,
@@ -30,10 +31,12 @@ import {
   getProcessedResponse,
   getSession,
   getStartResponse,
+  playerTurns,
   incrementLlmCallCount,
   recordStyleSignals,
   rememberResponse,
   rememberStartResponse,
+  rememberStyleReport,
   remainingSeconds,
   revertTurn,
   startTimer,
@@ -149,7 +152,7 @@ negotiationRouter.post('/negotiation/turn', async (req, res) => {
 
   // 마감 이후 접수된 입력은 LLM에 보내지 않는다 (공통규칙 §4).
   if (isExpired(receivedAtMs, deadlineSnapshotMs)) {
-    return res.json(finishAndRespond(session, stage, 'failure', 'time'));
+    return res.json(await finishAndRespond(session, stage, 'failure', 'time'));
   }
 
   const playerTurn = appendTurn(sessionId, { speaker: 'player', text: playerText.trim() });
@@ -201,7 +204,7 @@ negotiationRouter.post('/negotiation/turn', async (req, res) => {
   if (outcome === 'in_progress') {
     return res.json(viewOf(session, stage, 'in_progress', null, llm.npcReply));
   }
-  res.json(finishAndRespond(session, stage, outcome, endReason, llm.npcReply));
+  res.json(await finishAndRespond(session, stage, outcome, endReason, llm.npcReply));
 });
 
 // ─────────────────────────────────────────────
@@ -260,19 +263,37 @@ function endViewOf(session: Session, stage: StageDefinition, npcReply = ''): Neg
     expressionKey: endExpressionKey(stage, outcome),
     hintText: endReason === 'time' ? timeoutHint(session, stage) : null,
     result: buildResult(stage, outcome, endReason),
-    // TODO(3주차): styleAnalyzer가 완성되면 styleReport를 함께 싣는다.
-    //             "말의 호흡" 축의 글자 수 환산 범위를 기획에 확인 중이라 보류.
+    styleReport: session.styleReport ?? undefined,
   };
 }
 
-function finishAndRespond(
+/**
+ * 세션을 끝내고 리포트를 한 번 만든다.
+ *
+ * 리포트 생성은 종료 시 LLM을 한 번 더 부르는 일이라, 결과를 다시 조회할 때는
+ * 세션에 저장해둔 것을 그대로 쓴다.
+ */
+async function finishAndRespond(
   session: Session,
   stage: StageDefinition,
   outcome: NegotiationView['outcome'],
   endReason: NegotiationView['endReason'],
   npcReply = '',
-): NegotiationView {
+): Promise<NegotiationView> {
   endSession(session.sessionId, outcome, endReason);
+
+  const turns = playerTurns(session);
+  const narrative = turns.length === 0
+    // 한 마디도 안 했으면 부르지 않는다. 서버가 종료 사실만 한 줄로 적는다.
+    ? { title: '', titleNote: '', highlights: [], summary: silentSummary(endReason) }
+    : await generateNarrative({
+        stage, session, outcome, endReason, playerTurns: turns, signals: session.styleSignals,
+      });
+
+  rememberStyleReport(
+    session.sessionId,
+    buildReport(turns, session.styleSignals, narrative),
+  );
   return endViewOf(session, stage, npcReply);
 }
 

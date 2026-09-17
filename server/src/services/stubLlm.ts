@@ -1,7 +1,9 @@
 import type {
   AgreementJudgement,
   LlmTurnOutput,
+  Turn,
 } from '../../../shared/types/negotiationTypes';
+import type { StyleNarrative, StyleSignals } from '../../../shared/types/styleReportTypes';
 import type { Session } from '../models/session';
 import type { StageDefinition } from '../data/stageSchema';
 
@@ -43,14 +45,7 @@ export function stubEvaluateTurn(
     stageVerdict: 'continue' as const,
     fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
     expressionKey: stage.defaultExpressionKey,
-    styleSignals: {
-      formality: 70,
-      directness: 55,
-      hedging: 25,
-      isQuestion: playerText.trimEnd().endsWith('?'),
-      stageTags: [],
-      evidenceTurnId: playerTurnId,
-    },
+    styleSignals: fakeSignals(playerText, playerTurnId),
   };
 
   if (playerText.includes(FATAL_TEST_PHRASE)) {
@@ -100,4 +95,95 @@ export function stubEvaluateTurn(
     judgements: { [targetKey]: judgement },
     nextGoalKey: targetKey,
   };
+}
+
+/**
+ * 말투 분석값도 가짜로 만든다. 진짜 LLM은 발화의 의미를 보고 분류한다.
+ * 여기서는 프론트가 네 축이 움직이는 것을 확인할 수 있을 정도로만 흉내 낸다.
+ */
+function fakeSignals(playerText: string, playerTurnId: string): StyleSignals {
+  const text = playerText.trim();
+  const cushions = ['혹시', '좀', '죄송', '괜찮으시면', '조금'];
+  const found = cushions.filter((c) => text.includes(c));
+
+  let formality: StyleSignals['formality'] = null;
+  if (/습니다|습니까|십니까/.test(text)) formality = 'formal';
+  else if (/요[.?!]?$|요\s/.test(text)) formality = 'polite';
+  else if (text.length > 0) formality = 'casual';
+
+  // 요청·제안이 없는 발화는 직접성 집계에서 빠진다.
+  // 진짜 LLM은 의미를 보고 판단한다. 여기서는 약속·요청 어미를 훑는 수준이다.
+  const asksSomething = /겠|주세요|주실|할게|가능|드릴|바꿔|해 ?주|부탁/.test(text);
+  const directness: StyleSignals['directness'] = asksSomething
+    ? found.length > 0 ? 'indirect' : 'direct'
+    : null;
+
+  return {
+    formality,
+    directness,
+    cushionUsed: found.length > 0,
+    cushionPhrases: found,
+    stageTags: [],
+    evidenceTurnId: playerTurnId,
+  };
+}
+
+/**
+ * 종료 리포트의 가짜 생성.
+ *
+ * 진짜 LLM은 대화를 읽고 말투 이름을 새로 짓고 근거 발화를 고른다.
+ * 여기서는 저장된 분석값만 보고 뻔한 문장을 만든다. 프론트가 화면을 그려볼
+ * 수 있을 정도면 충분하다.
+ */
+export function stubNarrative(input: {
+  outcome: string;
+  endReason: string | null;
+  playerTurns: Turn[];
+  signals: StyleSignals[];
+}): StyleNarrative {
+  const { playerTurns, signals, outcome } = input;
+
+  const cushionTurns = signals.filter((s) => s.cushionUsed);
+  const phrases = [...new Set(cushionTurns.flatMap((s) => s.cushionPhrases))];
+  const formal = signals.filter((s) => s.formality === 'formal').length;
+
+  const title = cushionTurns.length >= 2
+    ? '돌려서 꺼내는 말'
+    : formal > playerTurns.length / 2
+      ? '깍듯한 설명가'
+      : '바로 말하는 쪽';
+
+  const titleNote = cushionTurns.length >= 2 && phrases.length > 0
+    ? `요청을 꺼내기 전에 "${phrases[0]}" 같은 말을 자주 먼저 붙였습니다.`
+    : '이번 대화에서는 원하는 것을 비교적 바로 꺼내는 쪽이었습니다.';
+
+  // 반복된 습관 하나 + 결정적인 순간 하나. 최대 5개 규칙 안에서 단순하게 고른다.
+  const highlights = [];
+  const firstCushion = cushionTurns[0];
+  if (firstCushion) {
+    const turn = playerTurns.find((t) => t.id === firstCushion.evidenceTurnId);
+    if (turn) {
+      highlights.push({
+        turnId: turn.id,
+        quote: turn.text,
+        note: `"${firstCushion.cushionPhrases[0]}" 같은 말을 ${cushionTurns.length}번 썼습니다.`,
+      });
+    }
+  }
+  const last = playerTurns[playerTurns.length - 1];
+  if (last && !highlights.some((h) => h.turnId === last.id)) {
+    highlights.push({
+      turnId: last.id,
+      quote: last.text,
+      note: outcome === 'success'
+        ? '이 발화로 마지막 합의가 성립했습니다.'
+        : '대화는 이 발화 뒤에 끝났습니다.',
+    });
+  }
+
+  const summary = outcome === 'success'
+    ? '상대가 필요로 하는 조건을 확인하고 그에 맞는 약속을 직접 제안했습니다. 요청을 꺼낼 때 사정을 먼저 설명하는 편이었고, 상대는 그 조건을 확인한 뒤 합의했습니다. 무엇을 약속하는지 분명하게 전달한 대화였습니다. (가짜 총평)'
+    : '상대의 설명을 들은 뒤 조건을 조정하는 과정까지는 이어지지 못했습니다. 원하는 것을 꺼내기는 했지만 합의에 필요한 내용이 남은 채로 대화가 끝났습니다. (가짜 총평)';
+
+  return { title, titleNote, highlights, summary };
 }

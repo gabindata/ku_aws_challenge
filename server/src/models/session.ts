@@ -8,7 +8,7 @@ import type {
   TimerStatus,
   Turn,
 } from '../../../shared/types/negotiationTypes';
-import type { StyleSignals } from '../../../shared/types/styleReportTypes';
+import type { StyleReport, StyleSignals } from '../../../shared/types/styleReportTypes';
 
 /**
  * 진행 중인 협상 세션. 서버 메모리에만 두고 단일 인스턴스로 배포한다.
@@ -50,6 +50,11 @@ export interface Session {
 
   /** 세션 시작 시점에 받은 월드 상태 키. NPC 대사 참조에만 쓴다. */
   worldStateKeys: string[];
+  /**
+   * 종료 시 한 번만 만든 리포트.
+   * 결과를 다시 조회하거나 화면을 다시 그릴 때 새로 생성하지 않는다.
+   */
+  styleReport: StyleReport | null;
 
   createdAtMs: number;
   /** 다음 메시지 id 번호. msg_01, msg_02 ... */
@@ -127,6 +132,7 @@ export function createSession(input: CreateSessionInput): Session {
     styleSignals: [],
     processedRequests: new Map(),
     worldStateKeys: input.worldStateKeys ?? [],
+    styleReport: null,
     createdAtMs: Date.now(),
     nextTurnSeq: 1,
   };
@@ -212,6 +218,15 @@ export function revertTurn(sessionId: string, turnId: string): void {
   const session = requireSession(sessionId);
   session.turns = session.turns.filter((t) => t.id !== turnId);
   session.llmCallCount = Math.max(0, session.llmCallCount - 1);
+}
+
+export function rememberStyleReport(sessionId: string, report: StyleReport): void {
+  requireSession(sessionId).styleReport = report;
+}
+
+/** 리포트 대상 유효 발화. 빈 STT와 되돌린 발화는 이미 기록에서 빠져 있다. */
+export function playerTurns(session: Session): Turn[] {
+  return session.turns.filter((t) => t.speaker === 'player');
 }
 
 export function endSession(sessionId: string, outcome: Outcome, endReason: EndReason): void {

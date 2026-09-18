@@ -51,6 +51,12 @@ export interface Session {
 
   /** 리포트 집계용. 판정 상태와 분리해 쌓는다. */
   styleSignals: StyleSignals[];
+  /**
+   * 치명적 행동의 근거가 된 플레이어 발화 id.
+   * 종료로 이어진 발화는 리포트에서 극단적인 발화로 인용되므로,
+   * 입력을 줄일 때 가장 먼저 지켜야 한다.
+   */
+  fatalTurnIds: string[];
   styleReport: StyleReport | null;
 
   // ── 멱등성 (공통규칙 §3) ──
@@ -128,6 +134,7 @@ export function createSession(input: CreateSessionInput): Session {
     repairRequestCount: 0,
     reportCallCount: 0,
     styleSignals: [],
+    fatalTurnIds: [],
     styleReport: null,
     requests: new Map(),
     messages: new Map(),
@@ -222,6 +229,11 @@ export function setAgreement(sessionId: string, key: string, state: AgreementSta
 
 export function setDisclosedFact(sessionId: string, key: string, fact: DisclosedFact): void {
   requireSession(sessionId).disclosedFacts[key] = fact;
+}
+
+export function recordFatalTurn(sessionId: string, turnId: string): void {
+  const session = requireSession(sessionId);
+  if (!session.fatalTurnIds.includes(turnId)) session.fatalTurnIds.push(turnId);
 }
 
 export function recordStyleSignals(sessionId: string, signals: StyleSignals): void {

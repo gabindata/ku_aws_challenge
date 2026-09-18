@@ -2,6 +2,11 @@ import type { LlmTurnOutput, Turn } from '../../../shared/types/negotiationTypes
 import type { StyleNarrative, StyleSignals } from '../../../shared/types/styleReportTypes';
 import type { Session } from '../models/session';
 import { MAX_REPORT_CALLS_PER_SESSION, type StageDefinition } from '../data/stageSchema';
+import {
+  buildReportInput,
+  exceedsBudgetWithoutExchanges,
+  type ReportInput,
+} from './reportInput';
 import { stubEvaluateTurn, stubNarrative } from './stubLlm';
 
 /**
@@ -64,8 +69,6 @@ export async function evaluateTurn(input: EvaluateTurnInput): Promise<LlmTurnOut
 
 /** 시도당 응답 시간 제한 */
 export const REPORT_TIMEOUT_MS = 15_000;
-/** 시스템 지침과 대화 자료를 포함한 전체 입력 기준 */
-export const REPORT_MAX_INPUT_TOKENS = 16_000;
 export const REPORT_MAX_OUTPUT_TOKENS = 2_000;
 
 export interface NarrativeInput {
@@ -90,14 +93,28 @@ export interface NarrativeInput {
  */
 export async function generateNarrative(input: NarrativeInput): Promise<StyleNarrative | null> {
   const { session } = input;
+  const report = buildReportInput(session, input.playerTurns);
+
+  // 유지해야 할 자료와 지침만으로도 상한을 넘으면 생성하지 않는다.
+  if (exceedsBudgetWithoutExchanges(report)) {
+    console.error('[report] 유지 자료만으로 입력 상한 초과 — 생성 실패 화면을 적용합니다');
+    return null;
+  }
+  if (report.truncated) {
+    console.warn(`[report] 기록 축약: 인용 후보 ${report.exchanges.length}/${input.playerTurns.length}개 유지`);
+  }
+
   while (session.reportCallCount < MAX_REPORT_CALLS_PER_SESSION) {
     session.reportCallCount += 1;
     const attempt = session.reportCallCount;
     try {
-      const raw = USE_STUB ? stubNarrative(input) : await callReportModel(input);
+      const attemptWork: Promise<StyleNarrative> = USE_STUB
+        ? Promise.resolve(stubNarrative(report, input.playerTurns))
+        : callReportModel(input, report);
+      const raw = await withTimeout(attemptWork, REPORT_TIMEOUT_MS);
       // 근거 발화 ID가 이 세션의 리포트 대상 플레이어 발화인지 확인하고
       // 저장된 원문으로 교체한 뒤 시간순으로 배치한다.
-      const verified = verifyNarrative(raw, input.playerTurns);
+      const verified = verifyNarrative(raw, input.playerTurns, report);
       if (verified) return verified;
       console.warn(`[report] 형식 검증 실패 (${attempt}/${MAX_REPORT_CALLS_PER_SESSION})`);
     } catch (err) {
@@ -107,32 +124,58 @@ export async function generateNarrative(input: NarrativeInput): Promise<StyleNar
   return null;
 }
 
-async function callReportModel(_input: NarrativeInput): Promise<StyleNarrative> {
-  // TODO(3주차): 대화 기록·확정된 결과·종료 이유·합의 상태·발화별 분석값을 넣고 호출.
-  // 전체 입력이 16000토큰을 넘으면 합의 변화·종료 원인, 반복된 말버릇의 대표 사례,
-  // 극단적인 발화의 근거를 우선 보존하고 나머지를 오래된 것부터 제외한다.
-  // 원문과 필요한 NPC 맥락은 묶어서 넣고, 원문을 제공한 발화만 인용 후보로 쓴다.
+async function callReportModel(_input: NarrativeInput, _report: ReportInput): Promise<StyleNarrative> {
+  // TODO(LLM 연결): 확정된 결과·종료 이유·합의 상태·전체 분석값·검증된 집계와
+  // 인용 후보 묶음을 넣고 호출한다. 기록을 일부 뺐다면 그 사실도 함께 전달한다.
+  // 입력 선택은 reportInput.ts가 끝내고, 여기서는 직렬화와 스키마 강제만 한다.
   throw new Error('not implemented');
+}
+
+/** 타임아웃도 형식 검증 실패와 같은 재시도·실패 규칙을 따른다. */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<T>((_, reject) => {
+      const timer = setTimeout(() => reject(new Error(`리포트 생성 ${ms}ms 초과`)), ms);
+      timer.unref?.();
+    }),
+  ]);
 }
 
 /**
  * 잘못된 근거 ID는 검증 실패로 처리한다. 조용히 버리지 않는다.
  * 인용문은 LLM이 준 것을 쓰지 않고 저장된 원문으로 교체한다.
  */
-function verifyNarrative(raw: StyleNarrative, playerTurns: Turn[]): StyleNarrative | null {
+function verifyNarrative(
+  raw: StyleNarrative,
+  playerTurns: Turn[],
+  report: ReportInput,
+): StyleNarrative | null {
   if (!raw.title?.trim() || !raw.summary?.trim()) return null;
-  if (raw.highlights.length > 5) return null;
+  if (!Array.isArray(raw.highlights) || raw.highlights.length > 5) return null;
 
   const byId = new Map(playerTurns.map((t) => [t.id, t]));
   const order = new Map(playerTurns.map((t, i) => [t.id, i]));
+  // 원문을 제공한 발화만 인용 후보다. 축약으로 뺀 기록은 인용할 수 없다.
+  const quotable = new Set(report.exchanges.map((e) => e.playerTurnId));
 
-  const highlights = [];
+  const merged = new Map<string, { turnId: string; quote: string; note: string }>();
   for (const h of raw.highlights) {
     const turn = byId.get(h.turnId);
-    if (!turn) return null;
-    highlights.push({ turnId: h.turnId, quote: turn.text, note: h.note });
+    if (!turn || !quotable.has(h.turnId)) return null;
+
+    // 같은 발화가 두 종류에 걸리면 하나로 합치고 두 이유를 함께 적는다.
+    const existing = merged.get(h.turnId);
+    if (existing) {
+      if (h.note && !existing.note.includes(h.note)) existing.note = `${existing.note} · ${h.note}`;
+      continue;
+    }
+    merged.set(h.turnId, { turnId: h.turnId, quote: turn.text, note: h.note });
   }
-  highlights.sort((a, b) => (order.get(a.turnId) ?? 0) - (order.get(b.turnId) ?? 0));
+
+  // 대화 흐름대로 놓는다.
+  const highlights = [...merged.values()]
+    .sort((a, b) => (order.get(a.turnId) ?? 0) - (order.get(b.turnId) ?? 0));
 
   return { ...raw, highlights };
 }

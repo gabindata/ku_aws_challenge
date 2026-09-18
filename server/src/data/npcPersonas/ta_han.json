@@ -1,0 +1,124 @@
+{
+  "stageId": 2,
+  "npcId": "ta_han",
+  "npcName": "한조교",
+  "location": "정보대학 행정실",
+  "difficulty": "normal",
+  "unlockRequirements": [
+    "tutorial_completed"
+  ],
+  "timeLimitSeconds": 600,
+  "maxLlmCallsPerSession": 40,
+  "requiredAgreementKeys": [
+    "documentsAgreed",
+    "submissionDeadlineAgreed",
+    "appointmentResponsibilityAgreed"
+  ],
+  "disclosureDefinitions": {
+    "returnReasonDisclosed": "복학원에 복학 사유를 작성해야 한다는 안내",
+    "delayReasonDisclosed": "복학원에 지연 사유를 작성해야 한다는 안내"
+  },
+  "agreementDefinitions": {
+    "documentsAgreed": {
+      "intent": "복학원의 복학 사유와 지연 사유를 플레이어가 직접 작성해 제출하는 책임을 받아들인다",
+      "passWhen": [
+        "NPC가 복학 사유와 지연 사유를 안내한 뒤, 본인이 복학원을 써서 내겠다는 뜻을 밝힌다. 두 항목을 다시 열거할 필요는 없다",
+        "두 항목 안내 이후라면 네 잘 작성해서 오겠습니다 같은 포괄적 수락도 성립한다. 직후 발화가 아니어도 복학원 작성에 동의한다는 대상이 분명하고 해당 안내가 현재 유효하면 된다",
+        "안내 전이라면 복학 사유와 지연 사유를 플레이어가 먼저 정확히 제안했을 때 성립한다",
+        "앞선 대화에서 한 항목이 이미 분명했다면 나머지 항목을 말한 발화로 성립한다"
+      ],
+      "clarifyWhen": [
+        "복학 사유와 지연 사유 중 한쪽만 쓰면 되느냐고 범위를 좁힌다",
+        "NPC가 아직 복학원과 두 항목을 안내하지 않은 상태에서 서류를 준비하겠다고만 말한다",
+        "NPC가 두 항목 중 한 항목만 말한 상태에서 포괄적으로 수락한다",
+        "양식만 받아 가겠다고 하거나 작성을 조교에게 대신 맡기려 한다",
+        "다른 이야기 뒤의 단순한 네처럼 작성 동의 대상이 모호하거나, 변경·철회된 안내 중 어떤 내용을 수락하는지 불분명하다",
+        "성립 후 작성할 수 있을지 불확실하게 말한다"
+      ],
+      "revokeWhen": [
+        "성립 후 복학 사유 또는 지연 사유를 쓰지 않겠다고 명시한다",
+        "본인이 맡기로 한 작성 책임을 철회한다"
+      ],
+      "contextConsentAllowed": true,
+      "contextAnchorScope": "session",
+      "playerMustPropose": false,
+      "memoGuide": "실제로 합의한 복학원 작성 항목과 본인 작성 책임을 적는다. 작성 완료나 복학 승인 완료로 쓰지 않는다"
+    },
+    "submissionDeadlineAgreed": {
+      "intent": "모레 오전 11시까지 복학원을 내겠다고 확정한다",
+      "passWhen": [
+        "모레 오전 11시까지 복학원을 내겠다는 뜻이 분명하다",
+        "NPC가 제출 시각을 제시한 직후 맥락상 수락한다",
+        "제출 장소와 미비 시 처리를 함께 말할 필요는 없다. 장소는 대화 장소이고 미비 시 처리는 NPC가 안내하는 사실이다"
+      ],
+      "clarifyWhen": [
+        "모레쯤·오전 중처럼 시각이 불분명하다",
+        "더 늦은 제출을 처음 제안한다",
+        "성립 후 기한 준수가 불확실해진다"
+      ],
+      "revokeWhen": [
+        "성립 후 모레 오전 11시보다 늦게 제출하겠다고 확정한다"
+      ],
+      "contextConsentAllowed": true,
+      "playerMustPropose": false,
+      "memoGuide": "실제 제출 기한만 적는다. 제출 완료로 쓰지 않는다"
+    },
+    "appointmentResponsibilityAgreed": {
+      "intent": "방문이 어려워지면 약속 시각 전에 미리 알리겠다고 직접 제안하거나 조교의 구체적인 제안을 수락한다",
+      "passWhen": [
+        "변경이 생기면 약속 시각 전에 학과 사무실 전화 또는 이메일로 알리겠다고 직접 제안하거나 조교의 같은 제안을 수락한다",
+        "방문 시각은 submissionDeadlineAgreed에서 이미 합의됐다면 다시 말하지 않아도 된다",
+        "방문 시각이 미정이어도 못 가게 되면 전화드릴게요처럼 불참 시 연락하겠다는 뜻은 사전 연락 약속으로 인정한다. 약속 시각 전에라는 표현을 요구하지 않으며 제출 기한은 별도 합의로 남긴다",
+        "과거 노쇼를 들은 뒤 구체적 재발 방지 행동을 제안하거나 NPC 제안을 수락한다. 직전 NPC가 제시한 연락 시점·수단은 복창할 필요 없으며 정해진 사과 문장도 요구하지 않는다"
+      ],
+      "clarifyWhen": [
+        "NPC 제안을 포함해도 연락하겠다는 뜻이나 연락 방법이 불분명하다. 못 가게 되면 연락 또는 미리 연락은 사전 연락 시점으로 충분하다",
+        "아직 연락 합의가 없는데 불참한 뒤에만 연락하겠다고 한다",
+        "조교가 먼저 연락해 달라고 한다",
+        "성립 후 연락 약속이 흔들린다"
+      ],
+      "revokeWhen": [
+        "성립 후 연락 약속을 철회한다",
+        "성립 후 불참해도 연락하지 않거나 불참한 뒤에만 연락하겠다고 명시한다"
+      ],
+      "contextConsentAllowed": true,
+      "playerMustPropose": false,
+      "memoGuide": "실제로 약속한 연락 시점·방법을 적는다"
+    }
+  },
+  "openingLines": [
+    "복학 신청이요? .…….(한숨) 확인해 볼게요.",
+    "기한이 3일 지나서 포털은 닫혔고, 휴학 기간도 이번 학기로 만료네요."
+  ],
+  "expressionKeys": [
+    "procedural",
+    "weighing",
+    "concerned",
+    "confirming",
+    "helping",
+    "closed"
+  ],
+  "defaultExpressionKey": "procedural",
+  "successExpressionKey": "helping",
+  "failureExpressionKey": "closed",
+  "successText": "복학 신청서를 제출할 기회를 얻었습니다.",
+  "fixedTerms": [
+    "복학원은 학과장 결재를 거쳐 학사지원부로 전달됩니다.",
+    "최종 복학 승인은 학사지원부 심사 후 결정됩니다."
+  ],
+  "failureText": "복학 신청 기회를 놓쳐 미복학 제적 처리됩니다.",
+  "limitText": "이야기가 길어져 오늘 상담은 여기서 끝났습니다.",
+  "failureHints": {
+    "documentsAgreed": "규정 안에서 신청을 검토받으려면 어떤 서류에 무엇을 써야 하는지 물어보세요.",
+    "submissionDeadlineAgreed": "서류를 언제까지 가져가야 하는지 확인해 보세요.",
+    "appointmentResponsibilityAgreed": "조교가 다시 기다리게 될까 걱정하는 이유를 듣고, 지킬 수 있는 행동을 제안해 보세요."
+  },
+  "styleReportConfig": {
+    "allowedStageTags": [
+      "procedure_question",
+      "specific_action_plan",
+      "repeated_plea"
+    ]
+  },
+  "successState": "return_application_opportunity_secured"
+}

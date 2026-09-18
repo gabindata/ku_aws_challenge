@@ -6,13 +6,28 @@ import type {
   TurnRequest,
   TurnResponse,
 } from '../types';
-import type { StyleAnalysisRequest, StyleAnalysisResponse } from '../types';
 
 /**
- * 백엔드 통신 (설계 문서 5장 계약).
- * 백엔드가 아직 없을 때는 USE_MOCK=true로 두고 같은 형태의 더미 응답으로 붙여본다.
+ * 백엔드 통신. 요청/응답 형태는 shared/types/negotiationTypes.ts가 단일 소스다.
+ * 백엔드가 아직 없을 때는 USE_MOCK으로 같은 형태의 더미를 쓴다.
  */
 const USE_MOCK = false;
+
+/**
+ * 발화 식별자와 처리 시도 식별자 (공통규칙 §3).
+ *
+ * - 새 발화: newMessageId()와 newRequestId()를 둘 다 새로 만든다
+ * - 응답을 못 받아 처리 여부를 모를 때: 같은 messageId·requestId·발화 내용으로 재전송
+ * - outcome이 retry일 때: 같은 messageId·발화 내용에 requestId만 새로 만든다
+ * - 발화 내용을 고쳤다면: 새 발화로 보고 두 ID를 새로 만든다 (같은 ID로 내용을 바꾸면 409)
+ */
+export function newRequestId(): string {
+  return crypto.randomUUID();
+}
+
+export function newMessageId(): string {
+  return `msg_${crypto.randomUUID()}`;
+}
 
 async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -31,22 +46,40 @@ export async function getStages(): Promise<StagesResponse> {
   return res.json() as Promise<StagesResponse>;
 }
 
-export function startNegotiation(npcId: string): Promise<StartResponse> {
-  return post<StartRequest, StartResponse>('/negotiation/start', { npcId });
+/**
+ * 협상 시작. worldState는 로컬 저장소에 보관한 월드 상태 키 목록이다.
+ * 세션 중에는 바뀌지 않으므로 여기서 한 번만 보낸다.
+ */
+export function startNegotiation(
+  stageId: number,
+  worldState: string[] = [],
+  requestId = newRequestId(),
+) {
+  return post<StartRequest, StartResponse>('/negotiation/start', { stageId, requestId, worldState });
 }
 
-export function sendTurn(sessionId: string, playerText: string): Promise<TurnResponse> {
-  return post<TurnRequest, TurnResponse>('/negotiation/turn', { sessionId, playerText });
+export function sendTurn(input: {
+  sessionId: string;
+  messageId: string;
+  playerText: string;
+  requestId?: string;
+}) {
+  return post<TurnRequest, TurnResponse>('/negotiation/turn', {
+    sessionId: input.sessionId,
+    messageId: input.messageId,
+    playerText: input.playerText,
+    requestId: input.requestId ?? newRequestId(),
+  });
 }
 
-export function getStyleReport(sessionId: string): Promise<StyleAnalysisResponse> {
-  return post<StyleAnalysisRequest, StyleAnalysisResponse>('/analysis/style', { sessionId });
-}
+// 종료 응답에 successText·failureText·limitText·hintText·rewards·styleReport가 함께 실린다.
+// 결과 화면에는 합의 메모·고정 안내·후일담을 표시하지 않는다. rewards는 로컬 저장소에만 반영한다.
 
 function mockStages(): StagesResponse {
   return [
-    { stageId: 1, npcId: 'merchant_kim', name: '시장 상인 김씨', difficulty: 'easy' },
-    { stageId: 2, npcId: 'car_dealer_park', name: '중고차 딜러 박씨', difficulty: 'normal' },
-    { stageId: 3, npcId: 'lawyer_lee', name: '계약 담당자 이변호사', difficulty: 'hard' },
+    {
+      stageId: 1, npcId: 'store_owner_yang', npcName: '양점장',
+      location: '동네 편의점', difficulty: 'easy', unlocked: true, recommended: true,
+    },
   ];
 }

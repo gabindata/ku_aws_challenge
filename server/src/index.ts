@@ -1,3 +1,5 @@
+// .env를 제일 먼저 읽는다. 다른 import보다 위에 있어야 한다.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { negotiationRouter } from './routes/negotiation';

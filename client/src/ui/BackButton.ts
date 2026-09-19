@@ -1,14 +1,19 @@
+
 import Phaser from 'phaser';
 
 export class BackButton {
+  public readonly button: Phaser.GameObjects.Text;
+
   constructor(
     scene: Phaser.Scene,
-    onClick: () => void
+    onClick: () => void,
+    x: number = 30,
+    y: number = 25
   ) {
-    const button = scene.add
+    this.button = scene.add
       .text(
-        30,
-        25,
+        x,
+        y,
         '← 뒤로가기',
         {
           fontFamily: 'YPairing',
@@ -24,21 +29,19 @@ export class BackButton {
       )
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(10000)
+      .setDepth(10001)
       .setInteractive({
         useHandCursor: true,
       });
 
-    button.on('pointerdown', () => {
-      onClick();
+    this.button.on('pointerdown', onClick);
+
+    this.button.on('pointerover', () => {
+      this.button.setAlpha(0.8);
     });
 
-    button.on('pointerover', () => {
-      button.setAlpha(0.8);
-    });
-
-    button.on('pointerout', () => {
-      button.setAlpha(1);
+    this.button.on('pointerout', () => {
+      this.button.setAlpha(1);
     });
   }
 }

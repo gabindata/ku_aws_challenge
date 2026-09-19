@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
 import { TimeOfDaySystem } from '../systems/TimeOfDaySystem';
+import { BackButton } from '../ui/BackButton';
 
 interface BlockedArea {
   name: string;
@@ -86,6 +87,7 @@ export class StageSelectScene extends Phaser.Scene {
   private timeOfDay!: TimeOfDaySystem;
   private clockText!: Phaser.GameObjects.Text;
   private clockContainer!: Phaser.GameObjects.Container;
+  private backButton!: BackButton;
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
   private collisionDebugVisible = false;
 
@@ -185,6 +187,22 @@ export class StageSelectScene extends Phaser.Scene {
     this.createCollisionAreas(width, height);
     this.configureCamera(width, height);
     this.createClock();
+
+    // 시계 아래 뒤로가기 버튼
+    this.backButton = new BackButton(
+      this,
+      () => {
+        this.scene.start(SceneKey.MainMenu);
+      }
+    );
+
+    // 시계와 같은 월드 좌표 기준으로 배치
+    this.backButton.button.setScrollFactor(1);
+
+    // 카메라 확대 배율 보정
+    this.backButton.button.setScale(
+      1 / this.cameras.main.zoom
+    );
 
     // 다른 씬으로 이동할 때 현재 게임 시간 저장
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -404,6 +422,9 @@ export class StageSelectScene extends Phaser.Scene {
     this.clockContainer.setScale(
       1 / this.cameras.main.zoom
     );
+
+    
+
   }
   
   private updateClock(): void {
@@ -429,6 +450,13 @@ export class StageSelectScene extends Phaser.Scene {
       camera.worldView.left + marginX,
       camera.worldView.top + marginY
     );
+
+    // 시계 바로 아래에 뒤로가기 버튼 고정
+    this.backButton.button.setPosition(
+      camera.worldView.left + 45 / camera.zoom,
+      camera.worldView.top + 125 / camera.zoom
+    );
+
   }
 
   private toggleCollisionDebug(): void {

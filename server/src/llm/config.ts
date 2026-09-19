@@ -12,6 +12,8 @@
 /** 프롬프트를 고칠 때마다 올린다. 판정 로그에 남겨 회귀 테스트의 기준으로 쓴다. */
 export const PROMPT_VERSION = '2026-09-19.3';
 
+import { MAX_OUTPUT_TOKENS, MAX_PROMPT_TOKENS } from '../data/stageSchema';
+
 export type LlmMode = 'stub' | 'live';
 
 /**
@@ -75,21 +77,14 @@ export interface RoleConfig {
 }
 
 /**
- * 판정 호출. 공통규칙 §4의 상한에서 두 값을 올렸다. 둘 다 재봤더니 원안으로는 안 돌아간다.
- *
- * 입력 4,000 -> 9,000
- *   고정 규칙 + 판정 기준표만으로 스테이지1 4,186 / 2 5,201 / 3 5,155토큰이다.
- *   판정 기준표는 어떤 경우에도 자를 수 없으니 4,000으로는 대화를 한 줄도 못 싣는다.
- *   최근 왕복 6회까지 다 실은 최악이 7,586토큰이라 여유를 두고 9,000으로 잡았다.
- *
- * 출력 500 -> 1,500
- *   합의 키 하나만 판정해도 JSON이 660토큰이고 다섯 개면 1,750토큰이다. 500이면 잘린다.
+ * 판정 호출. 상한은 공통규칙 §4 상수를 그대로 쓴다.
+ * 원안에서 올린 이유는 stageSchema.ts의 두 상수 주석에 있다.
  */
 export function judgeConfig(): RoleConfig {
   return {
     model: model('JUDGE'),
-    maxPromptTokens: 9_000,
-    maxOutputTokens: 1_500,
+    maxPromptTokens: MAX_PROMPT_TOKENS,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     // 타이머가 인정하는 정지 시간이 요청당 최대 20초라 그에 맞춘다.
     timeoutMs: 20_000,
   };

@@ -47,11 +47,17 @@ export function llmMode(): LlmMode {
 
 /**
  * 게이트웨이가 아는 별칭만 호출된다. 실제 모델 ID가 아니다.
- * 승인된 Claude 별칭: bedrock-haiku, bedrock-sonnet,
- *   bedrock-claude-sonnet-5, bedrock-claude-opus-4-8, bedrock-claude-fable-5
- * 내 키로 실제 부를 수 있는 목록은 GET /v1/models 로 확인한다.
+ *
+ * 가이드에 적힌 별칭이 다 불리는 게 아니라 신청서에서 승인받은 것만 불린다.
+ * 지금 키로 부를 수 있는 것은 bedrock-gpt-5.6-sol, bedrock-gpt-5.6-terra 둘뿐이고
+ * Claude 계열은 하나도 승인돼 있지 않다.
+ *
+ * 그중 sol은 판정 프롬프트(4.5천 토큰)에 20초를 줘도 응답이 오지 않는다.
+ * 실측으로 쓸 수 있는 것은 terra 하나뿐이라 그것을 기본값으로 둔다.
+ *
+ * 승인 목록이 바뀌면 여기 기본값만 고치면 된다. 확인은 npm run llm:smoke.
  */
-const DEFAULT_MODEL = 'bedrock-claude-sonnet-5';
+const DEFAULT_MODEL = 'bedrock-gpt-5.6-terra';
 
 function model(role: 'JUDGE' | 'REPORT'): string {
   return process.env[`LLM_MODEL_${role}`]
@@ -95,6 +101,8 @@ export function reportConfig(): RoleConfig {
     model: model('REPORT'),
     maxPromptTokens: 16_000,
     maxOutputTokens: 2_000,
-    timeoutMs: 15_000,
+    // 4.5천 토큰 판정이 5초 걸린다. 리포트 입력은 그 세 배라 원래 잡았던
+    // 15초로는 정상 응답도 끊긴다. 종료 화면이라 좀 기다려도 된다.
+    timeoutMs: 40_000,
   };
 }

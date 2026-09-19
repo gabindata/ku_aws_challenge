@@ -27,8 +27,20 @@ async function listModels(): Promise<string[]> {
   return (body.data ?? []).map((m) => m.id);
 }
 
-async function tryRole(label: string, config: ReturnType<typeof judgeConfig>) {
+async function tryRole(
+  label: string,
+  config: ReturnType<typeof judgeConfig>,
+  allowed: string[],
+) {
   process.stdout.write(`\n[${label}] 모델 ${config.model}\n`);
+
+  // 403 원문보다 이게 먼저 눈에 들어온다. 오타인지 미승인인지가 여기서 갈린다.
+  if (allowed.length > 0 && !allowed.includes(config.model)) {
+    console.log('  승인 목록에 없는 별칭입니다. 호출하지 않았습니다.');
+    console.log(`  .env의 LLM_MODEL_${label === '판정' ? 'JUDGE' : 'REPORT'} 를 위 목록 중 하나로 바꾸세요.`);
+    process.exitCode = 1;
+    return;
+  }
   const started = Date.now();
   try {
     const out = await callStructured({
@@ -38,7 +50,8 @@ async function tryRole(label: string, config: ReturnType<typeof judgeConfig>) {
       schema: probe,
       name: 'smoke_probe',
     });
-    console.log(`  성공 (${Date.now() - started}ms)`);
+    const ms = Date.now() - started;
+    console.log(`  성공 (${ms}ms)${ms > 3000 ? '  ← 판정에 쓰기엔 느립니다' : ''}`);
     console.log(`  받은 값: ${JSON.stringify(out)}`);
   } catch (err) {
     console.log(`  실패 (${Date.now() - started}ms)`);
@@ -57,15 +70,17 @@ async function main() {
     process.exit(1);
   }
 
+  let allowed: string[] = [];
   console.log('\n내 키로 부를 수 있는 별칭:');
   try {
-    for (const id of await listModels()) console.log(`  - ${id}`);
+    allowed = await listModels();
+    for (const id of allowed) console.log(`  - ${id}`);
   } catch (err) {
     console.log(`  목록 조회 실패: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  await tryRole('판정', judgeConfig());
-  await tryRole('리포트', reportConfig());
+  await tryRole('판정', judgeConfig(), allowed);
+  await tryRole('리포트', reportConfig(), allowed);
 
   console.log(
     process.exitCode

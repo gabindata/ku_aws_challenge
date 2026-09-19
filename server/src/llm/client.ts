@@ -19,7 +19,13 @@ let cached: OpenAI | null = null;
 
 function client(): OpenAI {
   if (!cached) {
-    cached = new OpenAI({ baseURL: baseUrl(), apiKey: apiKey() });
+    cached = new OpenAI({
+      baseURL: baseUrl(),
+      apiKey: apiKey(),
+      // SDK 기본값은 2회 재시도다. 그대로 두면 timeoutMs가 3배로 늘어나
+      // 20초로 잡은 제한이 실제로는 60초가 된다. 재시도는 호출부가 맡는다.
+      maxRetries: 0,
+    });
   }
   return cached;
 }

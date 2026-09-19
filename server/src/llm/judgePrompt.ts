@@ -58,8 +58,9 @@ const RULES = `당신은 한국어 협상 게임의 NPC이자 판정자입니다
 - expressionKey는 스테이지의 허용 목록에서만 고른다
 
 ## 안내 기록
-- 이번 대사에서 실제로 안내·변경·철회한 항목만 disclosureUpdates에 넣는다
-- 선언된 키만 쓴다. 변화가 없으면 빈 배열이다
+- 안내 키는 합의 키와 전혀 다른 목록이다. 합의 키를 disclosureUpdates에 넣지 않는다
+- 아래 「보존할 안내 항목」에 적힌 키만 쓴다. 그 항목이 없으면 항상 빈 배열이다
+- 이번 대사에서 실제로 안내·변경·철회한 항목만 넣는다. 변화가 없으면 빈 배열이다
 - 안내했다는 이유로 합의를 성립시키지 않는다
 
 ## 종료 신호
@@ -117,7 +118,9 @@ export function buildJudgeSystem(stage: StageDefinition): string {
     `표정 목록: ${stage.expressionKeys.join(', ')} (기본 ${stage.defaultExpressionKey})`,
     `허용 태그: ${stage.styleReportConfig.allowedStageTags.join(', ') || '없음'}`,
     `\n## 판정 기준표\n${keys}`,
-    disclosures ? `\n## 보존할 안내 항목\n${disclosures}` : '',
+    disclosures
+      ? `\n## 보존할 안내 항목\n${disclosures}`
+      : '\n## 보존할 안내 항목\n이 스테이지에는 없다. disclosureUpdates는 항상 빈 배열이다.',
   ].filter(Boolean).join('\n');
 }
 

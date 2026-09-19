@@ -1,13 +1,22 @@
 import type { LlmTurnOutput, Turn } from '../../../shared/types/negotiationTypes';
 import type { StyleNarrative, StyleSignals } from '../../../shared/types/styleReportTypes';
 import type { Session } from '../models/session';
-import { MAX_REPORT_CALLS_PER_SESSION, type StageDefinition } from '../data/stageSchema';
+import {
+  MAX_REPAIR_REQUESTS_PER_SESSION,
+  MAX_REPORT_CALLS_PER_SESSION,
+  type StageDefinition,
+} from '../data/stageSchema';
 import {
   buildReportInput,
   exceedsBudgetWithoutExchanges,
   type ReportInput,
 } from './reportInput';
 import { stubEvaluateTurn, stubNarrative } from './stubLlm';
+import { judgeConfig, llmMode, reportConfig } from '../llm/config';
+import { callStructured } from '../llm/client';
+import { judgeOutputSchema, narrativeSchema, type JudgeOutput } from '../llm/schemas';
+import { buildJudgePrompt } from '../llm/judgePrompt';
+import { buildReportSystem, buildReportUser } from '../llm/reportPrompt';
 
 /**
  * Claude API 래퍼. API 키는 서버에만 존재한다.
@@ -35,10 +44,12 @@ export interface EvaluateTurnInput {
 }
 
 /**
- * true면 Claude 대신 stubLlm이 답한다.
- * API 키가 준비되고 프롬프트가 완성되면 false로 바꾸고 stubLlm.ts를 지운다.
+ * 가짜 LLM을 쓸지. LLM_MODE 환경 변수로 정한다.
+ * 키가 준비되면 .env에서 LLM_MODE=live로 바꾸는 것만으로 전환된다.
  */
-export const USE_STUB = true;
+function useStub(): boolean {
+  return llmMode() === 'stub';
+}
 
 /**
  * 플레이어 발화 1건을 판정한다.
@@ -51,16 +62,89 @@ export const USE_STUB = true;
  * 판정 기준표, 현재 합의 요약은 어떤 경우에도 자르지 않는다.
  */
 export async function evaluateTurn(input: EvaluateTurnInput): Promise<LlmTurnOutput> {
-  if (USE_STUB) {
+  if (useStub()) {
     return stubEvaluateTurn(input.stage, input.session, input.playerTurnId, input.playerText);
   }
-  // TODO(2주차): 프롬프트 조립 → messages.parse()로 스키마 강제 → 결과 반환
-  // 스키마·정합성 오류는 같은 입력으로 수정 재요청을 한 번 한다.
+
+  const config = judgeConfig();
+  const playerTurn = input.session.turns.find((t) => t.id === input.playerTurnId);
+  if (!playerTurn) throw new Error(`판정 대상 발화를 찾을 수 없습니다: ${input.playerTurnId}`);
+
+  const prompt = buildJudgePrompt({
+    session: input.session,
+    stage: input.stage,
+    playerTurn,
+    worldStateReferences: input.worldStateReferences,
+    nearCallLimit: input.nearCallLimit,
+    finalCall: input.finalCall,
+  }, config.maxPromptTokens);
+
+  // 왕복을 모두 빼도 상한을 넘으면 호출하지 않고 retry / system으로 넘긴다.
+  if (!prompt) {
+    console.error(`[judge] 프롬프트가 ${config.maxPromptTokens}토큰을 넘어 호출하지 않습니다`);
+    throw new Error('프롬프트 상한 초과');
+  }
+
+  // 출력 형식이 틀리면 같은 입력으로 한 번 더 묻는다.
   // 수정 재요청은 세션당 5회이며 판정 호출 예산과 분리된다.
-  //
-  // 프롬프트에 넣을 월드 상태는 negotiationEngine.activeWorldStateReferences()로
-  // 선언 x 충족 교집합만 고른다.
-  throw new Error('not implemented');
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const raw = await callStructured({
+        config, system: prompt.system, userContent: prompt.user,
+        schema: judgeOutputSchema, name: 'turn_judgement',
+      });
+      return toTurnOutput(raw, input.playerTurnId);
+    } catch (err) {
+      if (input.session.repairRequestCount >= MAX_REPAIR_REQUESTS_PER_SESSION) {
+        console.error('[judge] 수정 재요청 예산 소진', err);
+        throw err;
+      }
+      if (attempt >= 1) {
+        console.error('[judge] 수정 재요청도 실패', err);
+        throw err;
+      }
+      input.session.repairRequestCount += 1;
+      console.warn(`[judge] 출력 오류로 수정 재요청 (세션 누적 ${input.session.repairRequestCount})`, err);
+    }
+  }
+}
+
+/**
+ * 구조화 출력의 배열을 문서가 정한 "키 -> 값" 객체로 바꾼다.
+ *
+ * 합의 키 이름은 스테이지마다 달라서 스키마에 미리 못 박을 수 없다.
+ * 그래서 LLM에게는 배열로 받고 여기서 객체로 옮긴다.
+ */
+function toTurnOutput(raw: JudgeOutput, playerTurnId: string): LlmTurnOutput {
+  const judgements: LlmTurnOutput['judgements'] = {};
+  for (const j of raw.judgements) {
+    if (j.action === 'keep') continue;
+    judgements[j.key] = {
+      action: j.action,
+      agreementSummary: j.agreementSummary ?? undefined,
+      reason: j.reason,
+      evidenceTurnIds: j.evidenceTurnIds,
+      contextAnchorTurnId: j.contextAnchorTurnId,
+      selfProposed: j.selfProposed,
+    };
+  }
+
+  const disclosureUpdates: LlmTurnOutput['disclosureUpdates'] = {};
+  for (const d of raw.disclosureUpdates) {
+    disclosureUpdates[d.key] = { status: d.status, summary: d.summary };
+  }
+
+  return {
+    npcReply: raw.npcReply,
+    judgements,
+    disclosureUpdates,
+    stageVerdict: raw.stageVerdict,
+    fatalBehavior: raw.fatalBehavior,
+    nextGoalKey: raw.nextGoalKey,
+    expressionKey: raw.expressionKey,
+    // 어느 발화의 분석값인지는 서버가 안다. LLM에게 받지 않는다.
+    styleSignals: { ...raw.styleSignals, evidenceTurnId: playerTurnId },
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -108,7 +192,7 @@ export async function generateNarrative(input: NarrativeInput): Promise<StyleNar
     session.reportCallCount += 1;
     const attempt = session.reportCallCount;
     try {
-      const attemptWork: Promise<StyleNarrative> = USE_STUB
+      const attemptWork: Promise<StyleNarrative> = useStub()
         ? Promise.resolve(stubNarrative(report, input.playerTurns))
         : callReportModel(input, report);
       const raw = await withTimeout(attemptWork, REPORT_TIMEOUT_MS);
@@ -124,11 +208,22 @@ export async function generateNarrative(input: NarrativeInput): Promise<StyleNar
   return null;
 }
 
-async function callReportModel(_input: NarrativeInput, _report: ReportInput): Promise<StyleNarrative> {
-  // TODO(LLM 연결): 확정된 결과·종료 이유·합의 상태·전체 분석값·검증된 집계와
-  // 인용 후보 묶음을 넣고 호출한다. 기록을 일부 뺐다면 그 사실도 함께 전달한다.
-  // 입력 선택은 reportInput.ts가 끝내고, 여기서는 직렬화와 스키마 강제만 한다.
-  throw new Error('not implemented');
+async function callReportModel(input: NarrativeInput, report: ReportInput): Promise<StyleNarrative> {
+  const config = reportConfig();
+  const raw = await callStructured({
+    config,
+    system: buildReportSystem(input.stage),
+    userContent: buildReportUser(report),
+    schema: narrativeSchema,
+    name: 'style_narrative',
+  });
+  // 인용문은 여기서 채우지 않는다. verifyNarrative가 ID를 검증한 뒤 저장된 원문으로 바꾼다.
+  return {
+    title: raw.title,
+    titleNote: raw.titleNote,
+    highlights: raw.highlights.map((h) => ({ turnId: h.turnId, quote: '', note: h.note })),
+    summary: raw.summary,
+  };
 }
 
 /** 타임아웃도 형식 검증 실패와 같은 재시도·실패 규칙을 따른다. */

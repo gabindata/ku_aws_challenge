@@ -4,6 +4,7 @@ import type {
   Turn,
 } from '../../../shared/types/negotiationTypes';
 import type { StyleNarrative, StyleSignals } from '../../../shared/types/styleReportTypes';
+import type { ReportInput } from './reportInput';
 import type { Session } from '../models/session';
 import type { StageDefinition } from '../data/stageSchema';
 
@@ -142,55 +143,37 @@ function fakeSignals(playerText: string, playerTurnId: string): StyleSignals {
  * 여기서는 저장된 분석값만 보고 뻔한 문장을 만든다. 프론트가 화면을 그려볼
  * 수 있을 정도면 충분하다.
  */
-export function stubNarrative(input: {
-  outcome: string;
-  endReason: string | null;
-  playerTurns: Turn[];
-  signals: StyleSignals[];
-}): StyleNarrative {
-  const { playerTurns, signals, outcome } = input;
+export function stubNarrative(report: ReportInput, playerTurns: Turn[]): StyleNarrative {
+  const { counts, outcome } = report;
 
-  const cushionTurns = signals.filter((s) => s.cushion.used);
-  const phrases = [...new Set(cushionTurns.flatMap((s) => s.cushion.expressions))];
-  const formal = signals.filter((s) => s.formality === 'formal').length;
-
-  const title = cushionTurns.length >= 2
+  const topPhrase = Object.entries(counts.cushionExpressions).sort((a, b) => b[1] - a[1])[0];
+  const title = counts.cushionUtterances >= 2
     ? '돌려서 꺼내는 말'
-    : formal > playerTurns.length / 2
-      ? '깍듯한 설명가'
-      : '바로 말하는 쪽';
+    : counts.averageLength >= 40 ? '길게 설명하는 쪽' : '바로 말하는 쪽';
 
-  const titleNote = cushionTurns.length >= 2 && phrases.length > 0
-    ? `요청을 꺼내기 전에 "${phrases[0]}" 같은 말을 자주 먼저 붙였습니다.`
+  const titleNote = topPhrase
+    ? `요청을 꺼내기 전에 "${topPhrase[0]}" 같은 말을 자주 먼저 붙였습니다.`
     : '이번 대화에서는 원하는 것을 비교적 바로 꺼내는 쪽이었습니다.';
 
-  // 반복된 습관 하나 + 결정적인 순간 하나. 최대 5개 규칙 안에서 단순하게 고른다.
-  const highlights = [];
-  const firstCushion = cushionTurns[0];
-  if (firstCushion) {
-    const turn = playerTurns.find((t) => t.id === firstCushion.evidenceTurnId);
-    if (turn) {
-      highlights.push({
-        turnId: turn.id,
-        quote: turn.text,
-        note: `"${firstCushion.cushion.expressions[0]}" 같은 말을 ${cushionTurns.length}번 썼습니다.`,
-      });
-    }
-  }
-  const last = playerTurns[playerTurns.length - 1];
-  if (last && !highlights.some((h) => h.turnId === last.id)) {
-    highlights.push({
-      turnId: last.id,
-      quote: last.text,
-      note: outcome === 'success'
-        ? '이 발화로 마지막 합의가 성립했습니다.'
-        : '대화는 이 발화 뒤에 끝났습니다.',
-    });
-  }
+  // 인용은 원문을 제공한 발화 중에서만 고른다. 우선순위가 높은 것부터 최대 3개.
+  const candidates = [...report.exchanges].sort((a, b) => b.priority - a.priority).slice(0, 3);
+  const highlights = candidates.map((e) => {
+    const isHabit = topPhrase && e.playerText.includes(topPhrase[0]);
+    return {
+      turnId: e.playerTurnId,
+      quote: e.playerText,
+      note: isHabit
+        ? `"${topPhrase![0]}" 같은 말을 ${topPhrase![1]}번 썼습니다.`
+        : e.priority >= 2
+          ? '이 발화에서 합의나 종료가 갈렸습니다.'
+          : '상대의 말 뒤에 바로 요구로 넘어갔습니다.',
+    };
+  });
 
   const summary = outcome === 'success'
     ? '상대가 필요로 하는 조건을 확인하고 그에 맞는 약속을 직접 제안했습니다. 요청을 꺼낼 때 사정을 먼저 설명하는 편이었고, 상대는 그 조건을 확인한 뒤 합의했습니다. 무엇을 약속하는지 분명하게 전달한 대화였습니다. (가짜 총평)'
     : '상대의 설명을 들은 뒤 조건을 조정하는 과정까지는 이어지지 못했습니다. 원하는 것을 꺼내기는 했지만 합의에 필요한 내용이 남은 채로 대화가 끝났습니다. (가짜 총평)';
 
+  void playerTurns;
   return { title, titleNote, highlights, summary };
 }

@@ -13,6 +13,7 @@ import {
   incrementLlmCallCount,
   markEnded,
   playerTurns,
+  recordFatalTurn,
   recordStyleSignals,
   remainingSeconds,
   removeTurn,
@@ -172,6 +173,8 @@ async function handleTurn(
 
   const fatal = isFatalConfirmed(session, llm);
   const expression = resolveExpressionKey(stage, llm.expressionKey);
+  // 되돌리지 않는 치명적 종료의 발화는 리포트에서 극단적인 발화로 인용된다.
+  if (fatal && stage.fatalRecovery !== true) recordFatalTurn(session.sessionId, playerTurn.id);
 
   // 3. fatalRecovery — 합의 상태를 건드리기 전이므로 되돌릴 것은 발화 기록뿐이다.
   //    해당 발화는 대화 기록·리포트 집계에서 빠지지만 사용한 호출 수는 유지한다.

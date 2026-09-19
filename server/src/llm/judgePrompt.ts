@@ -1,6 +1,6 @@
 import type { Turn } from '../../../shared/types/negotiationTypes';
 import type { Session } from '../models/session';
-import type { StageDefinition } from '../data/stageSchema';
+import { MAX_HISTORY_EXCHANGES, type StageDefinition } from '../data/stageSchema';
 import { estimateTokens } from '../services/reportInput';
 import { PROMPT_VERSION } from './config';
 
@@ -134,7 +134,7 @@ export interface JudgeUserInput {
 }
 
 /** 최근 왕복을 몇 개까지 넣을지. 상한을 넘으면 여기서부터 줄인다. */
-const MAX_EXCHANGES = 6;
+const MAX_EXCHANGES = MAX_HISTORY_EXCHANGES;
 
 function exchangesText(session: Session, playerTurnId: string, limit: number): string {
   // 이번 발화는 따로 싣는다. 그 앞의 기록만 최근 순으로 자른다.

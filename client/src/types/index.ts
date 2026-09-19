@@ -15,4 +15,6 @@ export const SceneKey = {
   Result: 'ResultScene',
   StyleReport: 'StyleReportScene',
   ConvenienceStore: 'ConvenienceStore',
+  DepartmentOffice: 'DepartmentOffice',
+  SchoolHallway: 'SchoolHallway',
 } as const;

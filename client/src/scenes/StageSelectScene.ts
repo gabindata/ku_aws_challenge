@@ -238,13 +238,13 @@ export class StageSelectScene extends Phaser.Scene {
           break;
     
         case 'assistant_han':
-          this.scene.start(SceneKey.Negotiation2, {
+          this.scene.start(SceneKey.DepartmentOffice, {
             npcId: this.nearbyNpcId,
           });
           break;
-    
+
         case 'seo_heejung':
-          this.scene.start(SceneKey.Negotiation3, {
+          this.scene.start(SceneKey.SchoolHallway, {
             npcId: this.nearbyNpcId,
           });
           break;

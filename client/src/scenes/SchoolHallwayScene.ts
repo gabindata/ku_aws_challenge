@@ -1,7 +1,7 @@
+
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
-import { BackButton } from '../ui/BackButton';
 
 interface BlockedArea {
   name: string;
@@ -192,7 +192,27 @@ const BLOCKED_AREAS: BlockedArea[] = [
 export class SchoolHallwayScene extends Phaser.Scene {
   private player!: Player;
 
+  private spawnAt: 'entrance' | 'office' = 'entrance';
+
+  init(data: { spawnAt?: 'entrance' | 'office' } = {}): void {
+  this.spawnAt = data.spawnAt ?? 'entrance';
+  }
+
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
+
+  // =========================
+  // F키 및 문 상호작용
+  // =========================
+
+  private interactKey!: Phaser.Input.Keyboard.Key;
+
+  // 왼쪽 문: 학과 사무실
+  private officeEntrance!: Phaser.GameObjects.Zone;
+  private officeEnterText!: Phaser.GameObjects.Text;
+
+  // 위쪽 중앙 유리문: 스테이지 선택 화면
+  private hallwayExit!: Phaser.GameObjects.Zone;
+  private exitEnterText!: Phaser.GameObjects.Text;
 
   constructor() {
     super(SceneKey.SchoolHallway);
@@ -218,14 +238,21 @@ export class SchoolHallwayScene extends Phaser.Scene {
     // 플레이어 생성
     // =========================
 
-    // 사진 기준 위쪽 출입문 바로 앞에서 시작
+
+    // 이전 화면에 따라 플레이어 시작 위치 결정
+    const spawnX =
+    this.spawnAt === 'office' ? 155 : 870;
+
+    const spawnY =
+    this.spawnAt === 'office' ? 560 : 200;
+
     this.player = new Player(
-      this,
-      width * (870 / SOURCE_WIDTH),
-      height * (200 / SOURCE_HEIGHT),
-      'player',
-      0.08,
-      450
+    this,
+    width * (spawnX / SOURCE_WIDTH),
+    height * (spawnY / SOURCE_HEIGHT),
+    'player',
+    0.08,
+    450
     );
 
     // =========================
@@ -235,19 +262,135 @@ export class SchoolHallwayScene extends Phaser.Scene {
     this.createCollisionAreas(width, height);
 
     // =========================
-    // 뒤로가기 버튼
+    // F키 등록
     // =========================
 
-    new BackButton(
-      this,
-      () => {
-        this.scene.start(SceneKey.StageSelect);
-      }
+    this.interactKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.F
     );
+
+    // =========================
+    // 1. 왼쪽 문 → 학과 사무실
+    // =========================
+
+
+    // 왼쪽 학과 사무실 문 바로 앞 감지 영역
+    this.officeEntrance = this.add.zone(
+        width * (105 / SOURCE_WIDTH),
+        height * (545 / SOURCE_HEIGHT),
+        width * (75 / SOURCE_WIDTH),
+        height * (65 / SOURCE_HEIGHT)
+    );
+    
+    this.physics.add.existing(this.officeEntrance, true);
+
+    // 왼쪽 문 근처에서 표시되는 F
+    this.officeEnterText = this.add
+      .text(
+        width * (45 / SOURCE_WIDTH),
+        height * (470 / SOURCE_HEIGHT),
+        '[F]',
+        {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
+          fontSize: '32px',
+          color: '#ffffff',
+          backgroundColor: '#000000aa',
+          padding: {
+            x: 12,
+            y: 6,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(10000)
+      .setVisible(false);
+
+    // =========================
+    // 2. 위쪽 유리문 → StageSelect
+    // =========================
+
+    // 유리문 바로 아래 바닥에 상호작용 영역 배치
+    this.hallwayExit = this.add.zone(
+      width * (870 / SOURCE_WIDTH),
+      height * (165 / SOURCE_HEIGHT),
+      width * (110 / SOURCE_WIDTH),
+      height * (45 / SOURCE_HEIGHT)
+    );
+
+    this.physics.add.existing(
+      this.hallwayExit,
+      true
+    );
+
+    // 위쪽 유리문 근처에서 표시되는 F
+    this.exitEnterText = this.add
+      .text(
+        width * (800 / SOURCE_WIDTH),
+        height * (90 / SOURCE_HEIGHT),
+        '[F]',
+        {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
+          fontSize: '32px',
+          color: '#ffffff',
+          backgroundColor: '#000000aa',
+          padding: {
+            x: 12,
+            y: 6,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(10000)
+      .setVisible(false);
   }
 
   update(): void {
     this.player.update();
+
+    // =========================
+    // 왼쪽 학과 사무실 문 확인
+    // =========================
+
+    const nearOffice = this.physics.overlap(
+      this.player,
+      this.officeEntrance
+    );
+
+    // =========================
+    // 위쪽 유리문 확인
+    // =========================
+
+    const nearExit = this.physics.overlap(
+      this.player,
+      this.hallwayExit
+    );
+
+    // 각 문 근처에 있을 때만 F 표시
+    this.officeEnterText.setVisible(nearOffice);
+    this.exitEnterText.setVisible(nearExit);
+
+    // F키를 누르면 해당 문으로 이동
+    if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      // 왼쪽 문 → 학과 사무실
+      if (nearOffice) {
+        this.scene.start(SceneKey.DepartmentOffice, {
+          npcId: 'assistant_han',
+        });
+
+        return;
+      }
+
+      // 위쪽 유리문 → 스테이지 선택 화면
+      if (nearExit) {
+        this.scene.start(SceneKey.StageSelect, {
+          spawnAt: 'school',
+        });
+      
+        return;
+      }
+    }
   }
 
   private createCollisionAreas(

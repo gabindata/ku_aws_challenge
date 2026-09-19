@@ -1,7 +1,7 @@
+
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
-import { BackButton } from '../ui/BackButton';
 
 interface BlockedArea {
   name: string;
@@ -203,6 +203,14 @@ export class DepartmentOfficeScene extends Phaser.Scene {
 
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
 
+  // =========================
+  // 오른쪽 출입문 상호작용
+  // =========================
+
+  private interactKey!: Phaser.Input.Keyboard.Key;
+  private officeExit!: Phaser.GameObjects.Zone;
+  private exitText!: Phaser.GameObjects.Text;
+
   constructor() {
     super(SceneKey.DepartmentOffice);
   }
@@ -227,7 +235,7 @@ export class DepartmentOfficeScene extends Phaser.Scene {
     // 플레이어 생성
     // =========================
 
-    // 사진 기준 오른쪽 통로에서 시작
+    // 오른쪽 통로에서 시작
     this.player = new Player(
       this,
       width * (1740 / SOURCE_WIDTH),
@@ -241,25 +249,71 @@ export class DepartmentOfficeScene extends Phaser.Scene {
     // 충돌 영역 생성
     // =========================
 
-    this.createCollisionAreas(
-      width,
-      height
-    );
+    this.createCollisionAreas(width, height);
 
     // =========================
-    // 뒤로가기 버튼
+    // 오른쪽 출입문 → 학교 복도
     // =========================
 
-    new BackButton(
-      this,
-      () => {
-        this.scene.start(SceneKey.StageSelect);
-      }
+    // F키 등록
+    this.interactKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.F
     );
+
+    // 오른쪽 문 바로 앞의 바닥에 감지 영역 배치
+    this.officeExit = this.add.zone(
+      width * (1800 / SOURCE_WIDTH),
+      height * (495 / SOURCE_HEIGHT),
+      width * (105 / SOURCE_WIDTH),
+      height * (110 / SOURCE_HEIGHT)
+    );
+
+    this.physics.add.existing(this.officeExit, true);
+
+    // 오른쪽 문 위에 F 표시
+    this.exitText = this.add
+      .text(
+        width * (1870 / SOURCE_WIDTH),
+        height * (450 / SOURCE_HEIGHT),
+        '[F]',
+        {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
+          fontSize: '32px',
+          color: '#ffffff',
+          backgroundColor: '#000000aa',
+          padding: {
+            x: 12,
+            y: 6,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(10000)
+      .setVisible(false);
   }
 
   update(): void {
     this.player.update();
+
+    // 오른쪽 문 근처인지 확인
+    const nearExit = this.physics.overlap(
+      this.player,
+      this.officeExit
+    );
+
+    // 문 근처에 있을 때만 F 표시
+    this.exitText.setVisible(nearExit);
+
+    // 문 앞에서 F키를 누르면 학교 복도로 이동
+    if (
+      nearExit &&
+      Phaser.Input.Keyboard.JustDown(this.interactKey)
+    ) {
+        this.scene.start(SceneKey.SchoolHallway, {
+            spawnAt: 'office',
+          });
+    }
   }
 
   private createCollisionAreas(

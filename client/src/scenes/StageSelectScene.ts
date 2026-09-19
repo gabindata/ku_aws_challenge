@@ -1,3 +1,4 @@
+
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
@@ -24,39 +25,103 @@ interface InteractionArea {
 const SOURCE_MAP_WIDTH = 1672;
 const SOURCE_MAP_HEIGHT = 941;
 
-/**
- * 첨부된 충돌 가이드의 빨간 영역. 큰 사각형 사이의 빈 공간만 걸을 수 있다.
- * 좌표는 원본 맵 기준이라 게임 해상도가 바뀌어도 함께 비례 조정된다.
- */
+// =========================
+// 충돌 영역
+// =========================
+
 const BLOCKED_AREAS: BlockedArea[] = [
-  { name: 'north-west', left: 0, top: 0, width: 302, height: 358 },
-  // 편의점 통로는 보도에서 현관까지만 열고 지붕과 뒤쪽은 막는다.
-  { name: 'store-back', left: 302, top: 0, width: 70, height: 245 },
-  { name: 'north-center', left: 372, top: 0, width: 693, height: 358 },
-  { name: 'north-east-center', left: 1190, top: 0, width: 155, height: 358 },
-  // 오른쪽 집도 현관 앞까지만 접근할 수 있게 통로 끝을 닫는다.
-  { name: 'house-back', left: 1345, top: 0, width: 60, height: 270 },
-  { name: 'north-east', left: 1405, top: 0, width: 267, height: 358 },
-  // 학교 현관으로 이어지는 좁은 통로(x 640~730)를 제외하고 아래를 막는다.
-  { name: 'south-west-left', left: 0, top: 570, width: 640, height: 371 },
-  { name: 'school-back', left: 640, top: 635, width: 90, height: 306 },
-  { name: 'south-west-right', left: 730, top: 570, width: 355, height: 371 },
-  { name: 'south-east', left: 1281, top: 570, width: 391, height: 371 },
+  {
+    name: 'north-west',
+    left: 0,
+    top: 0,
+    width: 302,
+    height: 358,
+  },
+
+  // 편의점 통로
+  {
+    name: 'store-back',
+    left: 302,
+    top: 0,
+    width: 70,
+    height: 245,
+  },
+
+  {
+    name: 'north-center',
+    left: 372,
+    top: 0,
+    width: 693,
+    height: 358,
+  },
+
+  {
+    name: 'north-east-center',
+    left: 1190,
+    top: 0,
+    width: 155,
+    height: 358,
+  },
+
+  {
+    name: 'house-back',
+    left: 1345,
+    top: 0,
+    width: 60,
+    height: 270,
+  },
+
+  {
+    name: 'north-east',
+    left: 1405,
+    top: 0,
+    width: 267,
+    height: 358,
+  },
+
+  // 학교 입구 주변
+  {
+    name: 'south-west-left',
+    left: 0,
+    top: 570,
+    width: 640,
+    height: 371,
+  },
+
+  {
+    name: 'school-back',
+    left: 640,
+    top: 635,
+    width: 90,
+    height: 306,
+  },
+
+  {
+    name: 'south-west-right',
+    left: 730,
+    top: 570,
+    width: 355,
+    height: 371,
+  },
+
+  {
+    name: 'south-east',
+    left: 1281,
+    top: 570,
+    width: 391,
+    height: 371,
+  },
 ];
 
-/**
- * 집 / 건물 입구 상호작용 영역
- *
- * x, y는 원본 맵 기준
- *
- * 현재 좌표는 대략적인 값이므로
- * 실제 화면에서 조금씩 조정
- */
+// =========================
+// 건물 상호작용 영역
+// =========================
+
 const INTERACTION_AREAS: InteractionArea[] = [
   {
     name: 'convenience-store',
     x: 337,
-    y: 315,
+    y: 305,
     width: 100,
     height: 100,
     npcId: 'manager_yang',
@@ -64,44 +129,69 @@ const INTERACTION_AREAS: InteractionArea[] = [
 
   {
     name: 'department-office',
-    x: 685,
-    y: 600,
+    x: 692,
+    y: 680,
     width: 110,
-    height: 100,
+    height: 240,
     npcId: 'assistant_han',
   },
 
   {
     name: 'hallway-302',
-    x: 1375,
-    y: 325,
+    x: 1373,
+    y: 340,
     width: 100,
     height: 100,
     npcId: 'seo_heejung',
   },
 ];
 
-
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
+
   private timeOfDay!: TimeOfDaySystem;
+
   private clockText!: Phaser.GameObjects.Text;
   private clockContainer!: Phaser.GameObjects.Container;
+
   private backButton!: BackButton;
+
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
   private collisionDebugVisible = false;
 
-  //건물 상호작용 관련
+  // =========================
+  // 건물 상호작용
+  // =========================
+
   private interactKey!: Phaser.Input.Keyboard.Key;
+
   private nearbyNpcId: string | null = null;
+
   private enterText!: Phaser.GameObjects.Text;
+
   private interactionZones: {
     zone: Phaser.GameObjects.Zone;
     area: InteractionArea;
   }[] = [];
-    
+
+  // =========================
+  // 플레이어 시작 위치
+  // =========================
+
+  private spawnAt: 'default' | 'school' | 'store' = 'default';
+
+
   constructor() {
     super(SceneKey.StageSelect);
+  }
+
+  // 다른 씬에서 전달받은 시작 위치
+  init(
+    data: {
+      spawnAt?: 'default' | 'school' | 'store';
+    } = {}
+  ): void {
+    this.spawnAt = data.spawnAt ?? 'default';
   }
 
   create(): void {
@@ -109,28 +199,44 @@ export class StageSelectScene extends Phaser.Scene {
 
     this.interactionZones = [];
 
-    this.collisionDebugVisible = new URLSearchParams(window.location.search)
-      .get('collisionDebug') === '1';
-  
-    const background = this.add.image(
-      width / 2,
-      height / 2,
-      'stage-select-base'
-    ).setDepth(-100);
-  
+    this.collisionDebugVisible =
+      new URLSearchParams(window.location.search)
+        .get('collisionDebug') === '1';
+
+    // =========================
+    // 기본 배경
+    // =========================
+
+    const background = this.add
+      .image(
+        width / 2,
+        height / 2,
+        'stage-select-base'
+      )
+      .setDepth(-100);
+
     background.setDisplaySize(width, height);
 
-    // 낮 맵과 동일한 구도의 완성된 저녁 맵을 위에 포개어 시간에 따라
-    // 알파를 올린다. 별도 불빛 마스크보다 원본 디테일을 안정적으로 보존한다.
+    // =========================
+    // 저녁 배경
+    // =========================
+
     const eveningBackground = this.add
-      .image(width / 2, height / 2, 'stage-select-evening')
+      .image(
+        width / 2,
+        height / 2,
+        'stage-select-evening'
+      )
       .setDisplaySize(width, height)
       .setDepth(-99)
       .setAlpha(0);
 
-    // 화면 왼쪽 위에서 들어오는 따뜻한 햇빛. 픽셀 맵을 흐리지 않도록
-    // 블러 없이 낮은 투명도의 사각 그라데이션만 사용한다.
+    // =========================
+    // 햇빛 효과
+    // =========================
+
     const sunlight = this.add.graphics().setDepth(900);
+
     sunlight.fillGradientStyle(
       0xffd5a3,
       0xffd5a3,
@@ -141,13 +247,29 @@ export class StageSelectScene extends Phaser.Scene {
       0,
       0
     );
+
     sunlight.fillRect(0, 0, width, height);
+
     sunlight.setBlendMode(Phaser.BlendModes.SCREEN);
 
+    // =========================
+    // 어두운 시간대 효과
+    // =========================
+
     const darkness = this.add
-      .rectangle(width / 2, height / 2, width, height, 0x17142f)
+      .rectangle(
+        width / 2,
+        height / 2,
+        width,
+        height,
+        0x17142f
+      )
       .setDepth(901)
       .setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+    // =========================
+    // 시간 시스템
+    // =========================
 
     this.timeOfDay = new TimeOfDaySystem(
       background,
@@ -156,39 +278,80 @@ export class StageSelectScene extends Phaser.Scene {
       darkness
     );
 
-    const savedGameMinutes = this.registry.get('gameTimeMinutes');
+    // 이전 게임 시간 복원
+    const savedGameMinutes =
+      this.registry.get('gameTimeMinutes');
 
     if (typeof savedGameMinutes === 'number') {
       this.timeOfDay.setGameMinutes(savedGameMinutes);
     }
 
-
     this.registerTimeOfDayTestKeys();
 
+    // =========================
+    // 플레이어 시작 위치 결정
+    // =========================
+
+    // 기본 입장: 기존 맵 중앙
+    // 학교 복도에서 나옴: 학교 건물 입구 앞
+    const spawnX =
+      this.spawnAt === 'school'
+        ? 685
+        : this.spawnAt === 'store'
+          ? 350
+          : SOURCE_MAP_WIDTH / 2;
+
+    const spawnY =
+      this.spawnAt === 'school'
+        ? 540
+        : this.spawnAt === 'store'
+          ? 390
+          : SOURCE_MAP_HEIGHT / 2;
 
     this.player = new Player(
       this,
-      width / 2,
-      height / 2,
+      width * (spawnX / SOURCE_MAP_WIDTH),
+      height * (spawnY / SOURCE_MAP_HEIGHT),
       'player',
       0.045
     );
+
+    // =========================
     // F키 등록
+    // =========================
+
     this.interactKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.F
     );
 
-    // 협상 장소의 입구 상호작용 영역 생성
-    this.createInteractionAreas(
-      width,
-      height
-    );
+    // =========================
+    // 상호작용 영역 생성
+    // =========================
+
+    this.createInteractionAreas(width, height);
+
+    // =========================
+    // 충돌 영역 생성
+    // =========================
 
     this.createCollisionAreas(width, height);
+
+    // =========================
+    // 카메라 설정
+    // =========================
+
     this.configureCamera(width, height);
+
+    // =========================
+    // 시계 생성
+    // =========================
+
     this.createClock();
 
+    // =========================
     // 시계 아래 뒤로가기 버튼
+    // =========================
+
     this.backButton = new BackButton(
       this,
       () => {
@@ -204,143 +367,195 @@ export class StageSelectScene extends Phaser.Scene {
       1 / this.cameras.main.zoom
     );
 
-    // 다른 씬으로 이동할 때 현재 게임 시간 저장
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.registry.set(
-        'gameTimeMinutes',
-        this.timeOfDay.getGameMinutes()
-      );
-    });
+    // =========================
+    // 다른 씬으로 이동할 때 게임 시간 저장
+    // =========================
 
+    this.events.once(
+      Phaser.Scenes.Events.SHUTDOWN,
+      () => {
+        this.registry.set(
+          'gameTimeMinutes',
+          this.timeOfDay.getGameMinutes()
+        );
+      }
+    );
   }
 
   update(_time: number, delta: number): void {
     this.player.update();
+
     this.timeOfDay.update(delta);
+
     this.updateClock();
-  
-    // 매 프레임 기본 상태
+
+    // =========================
+    // 상호작용 상태 초기화
+    // =========================
+
     this.nearbyNpcId = null;
+
     this.enterText.setVisible(false);
-  
-    // 플레이어가 어떤 interaction zone 안에 있는지 확인
+
+    // =========================
+    // 플레이어가 건물 입구 근처인지 확인
+    // =========================
+
     for (const { zone, area } of this.interactionZones) {
       if (this.physics.overlap(this.player, zone)) {
         this.nearbyNpcId = area.npcId;
-  
-        const scaleX = this.scale.width / SOURCE_MAP_WIDTH;
-        const scaleY = this.scale.height / SOURCE_MAP_HEIGHT;
-  
-        // 영역 안에 들어오기만 하면 바로 표시
+
+        const scaleX =
+          this.scale.width / SOURCE_MAP_WIDTH;
+
+        const scaleY =
+          this.scale.height / SOURCE_MAP_HEIGHT;
+
         this.enterText
           .setPosition(
             area.x * scaleX,
             (area.y - 65) * scaleY
           )
           .setVisible(true);
-  
+
         break;
       }
     }
-  
-    // 영역 안에서 F를 눌렀을 때만 협상 화면 이동
+
+    // =========================
+    // F키로 건물 입장
+    // =========================
+
     if (
       this.nearbyNpcId &&
       Phaser.Input.Keyboard.JustDown(this.interactKey)
     ) {
       switch (this.nearbyNpcId) {
+        // 편의점
         case 'manager_yang':
-          this.scene.start(SceneKey.ConvenienceStore, {
-            npcId: this.nearbyNpcId,
-          });
-          break;
-    
-        case 'assistant_han':
-          this.scene.start(SceneKey.DepartmentOffice, {
-            npcId: this.nearbyNpcId,
-          });
+          this.scene.start(
+            SceneKey.ConvenienceStore,
+            {
+              npcId: this.nearbyNpcId,
+            }
+          );
           break;
 
+        // 학교 건물 → 학교 복도
+        case 'assistant_han':
+          this.scene.start(
+            SceneKey.SchoolHallway,
+            {
+              npcId: this.nearbyNpcId,
+              spawnAt: 'entrance',
+            }
+          );
+          break;
+
+        // 기존 스테이지 3 진입 경로 유지
         case 'seo_heejung':
-          this.scene.start(SceneKey.SchoolHallway, {
-            npcId: this.nearbyNpcId,
-          });
+          this.scene.start(
+            SceneKey.SchoolHallway,
+            {
+              npcId: this.nearbyNpcId,
+              spawnAt: 'entrance',
+            }
+          );
           break;
       }
     }
   }
 
-  /** 개발 중 1=낮, 2=노을, 3=저녁, T=자동 흐름, C=충돌 영역을 확인한다. */
+  // =========================
+  // 시간대 및 충돌 테스트 키
+  // =========================
+
   private registerTimeOfDayTestKeys(): void {
     const keyboard = this.input.keyboard;
+
     if (!keyboard) return;
 
-    keyboard.on('keydown-ONE', () => this.timeOfDay.setPreset('day'));
-    keyboard.on('keydown-TWO', () => this.timeOfDay.setPreset('sunset'));
-    keyboard.on('keydown-THREE', () => this.timeOfDay.setPreset('night'));
-    keyboard.on('keydown-T', () => {
-      const isAutoPlaying = this.timeOfDay.toggleAutoPlay();
-      console.info(`시간대 자동 진행: ${isAutoPlaying ? '켜짐' : '꺼짐'}`);
+    keyboard.on('keydown-ONE', () => {
+      this.timeOfDay.setPreset('day');
     });
-    keyboard.on('keydown-C', () => this.toggleCollisionDebug());
+
+    keyboard.on('keydown-TWO', () => {
+      this.timeOfDay.setPreset('sunset');
+    });
+
+    keyboard.on('keydown-THREE', () => {
+      this.timeOfDay.setPreset('night');
+    });
+
+    keyboard.on('keydown-T', () => {
+      const isAutoPlaying =
+        this.timeOfDay.toggleAutoPlay();
+
+      console.info(
+        `시간대 자동 진행: ${
+          isAutoPlaying ? '켜짐' : '꺼짐'
+        }`
+      );
+    });
+
+    keyboard.on('keydown-C', () => {
+      this.toggleCollisionDebug();
+    });
   }
+
+  // =========================
+  // 건물 상호작용 영역
+  // =========================
 
   private createInteractionAreas(
     worldWidth: number,
     worldHeight: number
   ): void {
-    const scaleX = worldWidth / SOURCE_MAP_WIDTH;
-    const scaleY = worldHeight / SOURCE_MAP_HEIGHT;
-  
-    console.log('상호작용 영역 생성됨');
-  
-    // [F] 들어가기 안내
+    const scaleX =
+      worldWidth / SOURCE_MAP_WIDTH;
+
+    const scaleY =
+      worldHeight / SOURCE_MAP_HEIGHT;
+
+    // 건물 입구 F 안내
     this.enterText = this.add
-      .text(
-        0,
-        0,
-        '[F] 눌러 들어가기',
-        {
-          fontSize: '18px',
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          padding: {
-            x: 10,
-            y: 6,
-          },
-        }
-      )
-      .setOrigin(0.5)
-      .setDepth(6000)
-      .setVisible(false);
-  
+    .text(
+      0,
+      0,
+      '[F]',
+      {
+        fontFamily: 'YPairing',
+        fontStyle: 'bold',
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#000000aa',
+        padding: {
+          x: 10,
+          y: 6,
+        },
+      }
+    )
+    .setOrigin(0.5)
+    .setDepth(6000)
+    .setVisible(false);
+
+    // 건물별 상호작용 영역 생성
     INTERACTION_AREAS.forEach((area) => {
       const x = area.x * scaleX;
       const y = area.y * scaleY;
+
       const width = area.width * scaleX;
       const height = area.height * scaleY;
-  
-      console.log(
-        `interaction 생성: ${area.name}`,
-        x,
-        y,
-        width,
-        height
-      );
-  
-      // 실제 F 감지 영역
+
       const zone = this.add.zone(
         x,
         y,
         width,
         height
       );
-  
- 
-      // 플레이어가 영역에 들어왔을 때
+
       this.physics.add.existing(zone, true);
 
-      // update()에서 확인할 수 있도록 zone 저장
       this.interactionZones.push({
         zone,
         area,
@@ -348,48 +563,93 @@ export class StageSelectScene extends Phaser.Scene {
     });
   }
 
-  private createCollisionAreas(worldWidth: number, worldHeight: number): void {
-    const scaleX = worldWidth / SOURCE_MAP_WIDTH;
-    const scaleY = worldHeight / SOURCE_MAP_HEIGHT;
+  // =========================
+  // 충돌 영역 생성
+  // =========================
 
-    this.collisionAreas = BLOCKED_AREAS.map((area) => {
-      const width = area.width * scaleX;
-      const height = area.height * scaleY;
-      const blocker = this.add
-        .rectangle(
-          (area.left + area.width / 2) * scaleX,
-          (area.top + area.height / 2) * scaleY,
-          width,
-          height,
-          0xff1744,
-          this.collisionDebugVisible ? 0.48 : 0
-        )
-        .setDepth(1_000)
-        .setName(`blocked-${area.name}`);
+  private createCollisionAreas(
+    worldWidth: number,
+    worldHeight: number
+  ): void {
+    const scaleX =
+      worldWidth / SOURCE_MAP_WIDTH;
 
-      this.physics.add.existing(blocker, true);
-      this.physics.add.collider(this.player, blocker);
-      return blocker;
-    });
+    const scaleY =
+      worldHeight / SOURCE_MAP_HEIGHT;
+
+    this.collisionAreas = BLOCKED_AREAS.map(
+      (area) => {
+        const width = area.width * scaleX;
+        const height = area.height * scaleY;
+
+        const blocker = this.add
+          .rectangle(
+            (area.left + area.width / 2) * scaleX,
+            (area.top + area.height / 2) * scaleY,
+            width,
+            height,
+            0xff1744,
+            this.collisionDebugVisible ? 0.48 : 0
+          )
+          .setDepth(1000)
+          .setName(`blocked-${area.name}`);
+
+        this.physics.add.existing(
+          blocker,
+          true
+        );
+
+        this.physics.add.collider(
+          this.player,
+          blocker
+        );
+
+        return blocker;
+      }
+    );
   }
 
-  private configureCamera(worldWidth: number, worldHeight: number): void {
+  // =========================
+  // 카메라
+  // =========================
+
+  private configureCamera(
+    worldWidth: number,
+    worldHeight: number
+  ): void {
     const camera = this.cameras.main;
-    camera.setBounds(0, 0, worldWidth, worldHeight);
+
+    camera.setBounds(
+      0,
+      0,
+      worldWidth,
+      worldHeight
+    );
+
     camera.setZoom(1.5);
+
     camera.setRoundPixels(true);
+
     camera.setDeadzone(280, 180);
-    camera.startFollow(this.player, true, 0.1, 0.1);
+
+    camera.startFollow(
+      this.player,
+      true,
+      0.1,
+      0.1
+    );
   }
+
+  // =========================
+  // 시계 생성
+  // =========================
 
   private createClock(): void {
-    // 시계 배경
     const clockBackground = this.add
       .image(0, 0, 'button-default')
       .setDisplaySize(220, 90)
       .setAlpha(0.8);
-  
-    // 시간 텍스트
+
     this.clockText = this.add
       .text(
         0,
@@ -404,8 +664,7 @@ export class StageSelectScene extends Phaser.Scene {
         }
       )
       .setOrigin(0.5);
-  
-    // 배경 + 시간을 하나로 묶음
+
     this.clockContainer = this.add.container(
       0,
       0,
@@ -414,63 +673,74 @@ export class StageSelectScene extends Phaser.Scene {
         this.clockText,
       ]
     );
-  
-    // 맨 위에 표시
+
     this.clockContainer.setDepth(10000);
-  
-    // 카메라 줌 영향을 상쇄
+
+    // 카메라 확대 배율 보정
     this.clockContainer.setScale(
       1 / this.cameras.main.zoom
     );
-
-    
-
   }
-  
+
+  // =========================
+  // 시계 및 뒤로가기 버튼 위치 갱신
+  // =========================
+
   private updateClock(): void {
-    const totalMinutes = this.timeOfDay.getGameMinutes();
-  
-    // 화면에는 30분 단위로 표시
-    const displayMinutes = Math.floor(totalMinutes / 30) * 30;
-  
-    const hour = Math.floor(displayMinutes / 60);
-    const minute = displayMinutes % 60;
-  
-    const hourText = hour.toString().padStart(2, '0');
-    const minuteText = minute.toString().padStart(2, '0');
-    
-    this.clockText.setText(`${hourText}:${minuteText}`);
-  
-    // 현재 카메라 기준 좌측 상단에 고정
+    const totalMinutes =
+      this.timeOfDay.getGameMinutes();
+
+    // 30분 단위로 표시
+    const displayMinutes =
+      Math.floor(totalMinutes / 30) * 30;
+
+    const hour =
+      Math.floor(displayMinutes / 60);
+
+    const minute =
+      displayMinutes % 60;
+
+    const hourText =
+      hour.toString().padStart(2, '0');
+
+    const minuteText =
+      minute.toString().padStart(2, '0');
+
+    this.clockText.setText(
+      `${hourText}:${minuteText}`
+    );
+
     const camera = this.cameras.main;
+
     const marginX = 135 / camera.zoom;
     const marginY = 60 / camera.zoom;
 
+    // 시계 고정
     this.clockContainer.setPosition(
       camera.worldView.left + marginX,
       camera.worldView.top + marginY
     );
 
-    // 시계 바로 아래에 뒤로가기 버튼 고정
+    // 시계 아래 뒤로가기 버튼 고정
     this.backButton.button.setPosition(
       camera.worldView.left + 45 / camera.zoom,
       camera.worldView.top + 125 / camera.zoom
     );
-
   }
 
-  private toggleCollisionDebug(): void {
-    this.collisionDebugVisible = !this.collisionDebugVisible;
-  
-    // 빨간색 = 이동 불가능 영역
-    const collisionAlpha = this.collisionDebugVisible ? 0.48 : 0;
+  // =========================
+  // 충돌 영역 표시 전환
+  // =========================
 
-  
+  private toggleCollisionDebug(): void {
+    this.collisionDebugVisible =
+      !this.collisionDebugVisible;
+
+    const collisionAlpha =
+      this.collisionDebugVisible ? 0.48 : 0;
+
     this.collisionAreas.forEach((area) => {
       area.setAlpha(collisionAlpha);
     });
-  
-
   }
-
 }

@@ -63,6 +63,13 @@ export class PreloadScene extends Phaser.Scene {
     );
 
     //스테이지2 리소스
+
+    this.load.image(
+      'school-hallway-interior',
+      'assets/images/stage2/school-hallway-interior.png'
+    );
+
+    
     this.load.image(
       'stage2-bg',
       'assets/images/stage2/stage2-bg.png'
@@ -81,11 +88,7 @@ export class PreloadScene extends Phaser.Scene {
 
     //스테이지3 리소스
 
-    this.load.image(
-      'school-hallway-interior',
-      'assets/images/stage3/school-hallway-interior.png'
-    );
-    
+
     this.load.image(
       'stage3-bg',
       'assets/images/stage3/stage3-bg.png'

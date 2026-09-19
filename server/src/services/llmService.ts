@@ -90,7 +90,8 @@ export async function evaluateTurn(input: EvaluateTurnInput): Promise<LlmTurnOut
   for (let attempt = 0; ; attempt += 1) {
     try {
       const raw = await callStructured({
-        config, system: prompt.system, userContent: prompt.user, schema: judgeOutputSchema,
+        config, system: prompt.system, userContent: prompt.user,
+        schema: judgeOutputSchema, name: 'turn_judgement',
       });
       return toTurnOutput(raw, input.playerTurnId);
     } catch (err) {
@@ -214,6 +215,7 @@ async function callReportModel(input: NarrativeInput, report: ReportInput): Prom
     system: buildReportSystem(input.stage),
     userContent: buildReportUser(report),
     schema: narrativeSchema,
+    name: 'style_narrative',
   });
   // 인용문은 여기서 채우지 않는다. verifyNarrative가 ID를 검증한 뒤 저장된 원문으로 바꾼다.
   return {

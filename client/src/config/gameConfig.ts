@@ -2,9 +2,16 @@ import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { MainMenuScene } from '../scenes/MainMenuScene';
-import { NegotiationScene } from '../scenes/NegotiationScene';
+import { TutorialScene } from '../scenes/TutorialScene';
+import { StageSelectScene } from '../scenes/StageSelectScene';
+import { NegotiationScene1 } from '../scenes/NegotiationScene1';
+import { NegotiationScene2 } from '../scenes/NegotiationScene2';
+import { NegotiationScene3 } from '../scenes/NegotiationScene3';
 import { ResultScene } from '../scenes/ResultScene';
 import { StyleReportScene } from '../scenes/StyleReportScene';
+import { ConvenienceStoreScene } from '../scenes/ConvenienceStoreScene';
+import { DepartmentOfficeScene } from '../scenes/DepartmentOfficeScene';
+import { SchoolHallwayScene } from '../scenes/SchoolHallwayScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -12,17 +19,41 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: 1920,
   height: 1080,
   backgroundColor: '#1a1a24',
+  pixelArt: true,
+  antialias: false,
+  roundPixels: true,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: 1920,
     height: 1080,
   },
+
+  //캐릭터 움직임
+  physics: {
+    default: 'arcade',
+    arcade: {
+      gravity: {
+        x: 0,
+        y: 0,
+      },
+      debug: false,
+    },
+  },
+
+
   scene: [
     BootScene,
     PreloadScene,
     MainMenuScene,
-    NegotiationScene,
+    TutorialScene,
+    StageSelectScene,
+    NegotiationScene1,
+    NegotiationScene2,
+    NegotiationScene3,
+    ConvenienceStoreScene,
+    DepartmentOfficeScene,
+    SchoolHallwayScene,
     ResultScene,
     StyleReportScene,
   ],

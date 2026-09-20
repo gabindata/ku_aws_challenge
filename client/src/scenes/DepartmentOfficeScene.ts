@@ -240,8 +240,8 @@ export class DepartmentOfficeScene extends Phaser.Scene {
       this,
       width * (1740 / SOURCE_WIDTH),
       height * (430 / SOURCE_HEIGHT),
-      'player',
-      0.08,
+      'down-idle',
+      0.64,
       450
     );
 

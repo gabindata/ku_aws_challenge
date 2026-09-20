@@ -250,8 +250,8 @@ export class SchoolHallwayScene extends Phaser.Scene {
     this,
     width * (spawnX / SOURCE_WIDTH),
     height * (spawnY / SOURCE_HEIGHT),
-    'player',
-    0.08,
+    'down-idle',
+    0.64,
     450
     );
 

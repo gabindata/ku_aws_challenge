@@ -156,8 +156,8 @@ export class ConvenienceStoreScene extends Phaser.Scene {
       this,
       width * (960 / SOURCE_WIDTH),
       height * (720 / SOURCE_HEIGHT),
-      'player',
-      0.08,
+      'down-idle',
+      0.64,
       450
     );
 

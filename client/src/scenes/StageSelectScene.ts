@@ -298,7 +298,7 @@ export class StageSelectScene extends Phaser.Scene {
       this.spawnAt === 'school'
         ? 685
         : this.spawnAt === 'store'
-          ? 350
+          ? 30
           : SOURCE_MAP_WIDTH / 2;
 
     const spawnY =
@@ -308,13 +308,13 @@ export class StageSelectScene extends Phaser.Scene {
           ? 390
           : SOURCE_MAP_HEIGHT / 2;
 
-    this.player = new Player(
-      this,
-      width * (spawnX / SOURCE_MAP_WIDTH),
-      height * (spawnY / SOURCE_MAP_HEIGHT),
-      'player',
-      0.045
-    );
+      this.player = new Player(
+        this,
+        width * (spawnX / SOURCE_MAP_WIDTH),
+        height * (spawnY / SOURCE_MAP_HEIGHT),
+        'down-idle',
+        0.32
+      );
 
     // =========================
     // F키 등록

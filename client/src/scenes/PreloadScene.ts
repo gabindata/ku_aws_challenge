@@ -213,57 +213,79 @@ export class PreloadScene extends Phaser.Scene {
     this.scene.start(SceneKey.MainMenu);
   }
 
+  
   // =========================
   // 사람 캐릭터 걷기 애니메이션
   // =========================
 
   private createPlayerAnimations(): void {
+
+    // =========================
     // S키: 아래쪽 걷기
+    // =========================
+
     if (!this.anims.exists('walk-down')) {
       this.anims.create({
         key: 'walk-down',
         frames: [
           { key: 'down-walk-1' },
+          { key: 'down-idle' },
           { key: 'down-walk-2' },
+          { key: 'down-idle' },
         ],
         frameRate: 6,
         repeat: -1,
       });
     }
 
+    // =========================
     // W키: 위쪽 걷기
+    // =========================
+
     if (!this.anims.exists('walk-up')) {
       this.anims.create({
         key: 'walk-up',
         frames: [
           { key: 'up-walk-1' },
+          { key: 'up-idle' },
           { key: 'up-walk-2' },
+          { key: 'up-idle' },
         ],
         frameRate: 6,
         repeat: -1,
       });
     }
 
+    // =========================
     // A키: 왼쪽 걷기
+    // =========================
+
     if (!this.anims.exists('walk-left')) {
       this.anims.create({
         key: 'walk-left',
         frames: [
           { key: 'left-walk-1' },
+          { key: 'left-idle' },
           { key: 'left-walk-2' },
+          { key: 'left-idle' },
         ],
         frameRate: 6,
         repeat: -1,
       });
     }
 
+    // =========================
     // D키: 오른쪽 걷기
+    // =========================
+
     if (!this.anims.exists('walk-right')) {
       this.anims.create({
         key: 'walk-right',
         frames: [
           { key: 'right-walk-1' },
+          { key: 'right-idle' },
           { key: 'right-walk-2' },
+          { key: 'right-idle' },
         ],
         frameRate: 6,
         repeat: -1,

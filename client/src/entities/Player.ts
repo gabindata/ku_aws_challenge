@@ -9,12 +9,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // 각 씬에서 전달받은 캐릭터 배율
   private readonly playerScale: number;
 
-  // 모든 사람 캐릭터 이미지를 256×256px 기준으로 표시
+  // 모든 사람 캐릭터 이미지 크기
   private readonly baseImageSize = 256;
 
-  // 256×256px 이미지 기준 캐릭터 몸체 전체 충돌 영역
+  // 256×256 이미지 기준 캐릭터 몸체 충돌 영역
   private readonly collisionWidth = 150;
   private readonly collisionHeight = 210;
+  // 플레이어 충돌 영역 빨간색 표시
+private collisionDebug!: Phaser.GameObjects.Graphics;
   private readonly collisionBottomOffset = 10;
 
   // 마지막으로 바라본 방향
@@ -23,6 +25,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // 사람 캐릭터인지 확인
   private readonly isHumanPlayer: boolean;
 
+  // WASD 키
   private keys: {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
@@ -43,16 +46,28 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.speed = speed;
     this.playerScale = scale;
 
-    // 새 사람 캐릭터인지 확인
+    // 사람 캐릭터인지 확인
     this.isHumanPlayer = texture === 'down-idle';
 
+    // 씬에 캐릭터 추가
     scene.add.existing(this);
+
+    // Arcade Physics 적용
     scene.physics.add.existing(this);
 
     // 캐릭터 크기 및 충돌 영역 설정
+    // 생성 시 한 번만 실행
     this.updatePlayerSize();
 
+    // 플레이어 충돌 영역 표시용 그래픽 생성
+this.collisionDebug = scene.add.graphics();
+
+this.collisionDebug.setDepth(9999);
+
+    // 월드 경계 충돌
     this.setCollideWorldBounds(true);
+
+    // 캐릭터 깊이
     this.setDepth(0);
 
     // WASD 키 등록
@@ -66,7 +81,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     };
   }
 
+  // =========================
+  // 플레이어 이동 및 애니메이션
+  // =========================
+
   update(): void {
+
     // 기존 이동속도 초기화
     this.setVelocity(0);
 
@@ -101,7 +121,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       movingDirection = 'down';
     }
 
+    // =========================
     // 대각선 이동속도 보정
+    // =========================
+
     const velocity = this.body?.velocity;
 
     if (velocity && velocity.lengthSq() > 0) {
@@ -109,32 +132,72 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     // =========================
-    // 사람 캐릭터 걷기 모션
+    // 사람 캐릭터 애니메이션
     // =========================
 
     if (this.isHumanPlayer) {
+
+      // 이동 중
       if (movingDirection) {
-        // 이동 중: 해당 방향 걷기 모션 반복
+
         this.lastDirection = movingDirection;
 
-        this.anims.play(
-          `walk-${movingDirection}`,
-          true
-        );
-      } else {
-        // 정지: 마지막으로 바라본 방향의 정지 이미지
-        this.anims.stop();
+        const animationKey = `walk-${movingDirection}`;
 
-        const idleTexture = `${this.lastDirection}-idle`;
+        // 현재 애니메이션과 이동 방향이 다르거나
+        // 애니메이션이 정지했을 때만 새로 재생
+        if (
+          this.anims.currentAnim?.key !== animationKey ||
+          !this.anims.isPlaying
+        ) {
+          this.anims.play(animationKey);
+        }
+
+      } else {
+
+        // =========================
+        // 정지 상태
+        // =========================
+
+        // 걷기 애니메이션 정지
+        if (this.anims.isPlaying) {
+          this.anims.stop();
+        }
+
+        // 마지막으로 바라본 방향의 정지 이미지
+        const idleTexture =
+          `${this.lastDirection}-idle`;
 
         if (this.texture.key !== idleTexture) {
           this.setTexture(idleTexture);
         }
       }
-
-      // 이미지가 바뀌어도 표시 크기와 충돌 영역 유지
-      this.updatePlayerSize();
     }
+
+        // =========================
+    // 플레이어 충돌 영역 빨간색 표시
+    // =========================
+
+    const body =
+      this.body as Phaser.Physics.Arcade.Body;
+
+    // 이전 프레임의 테두리 제거
+    this.collisionDebug.clear();
+
+    // 빨간색 테두리 설정
+    this.collisionDebug.lineStyle(
+      2,
+      0xff0000,
+      1
+    );
+
+    // 실제 충돌 영역 표시
+    this.collisionDebug.strokeRect(
+      body.x,
+      body.y,
+      body.width,
+      body.height
+    );
   }
 
   // =========================
@@ -142,20 +205,24 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // =========================
 
   private updatePlayerSize(): void {
+
+    // =========================
+    // 기존 너구리 캐릭터
+    // =========================
+
     if (!this.isHumanPlayer) {
+
       // 기존 너구리는 전달받은 배율 그대로 적용
       this.setScale(this.playerScale);
+
       return;
     }
 
-    const imageWidth = this.width;
-    const imageHeight = this.height;
-
     // =========================
-    // 캐릭터 표시 크기
+    // 사람 캐릭터 표시 크기
     // =========================
 
-    // PNG 원본 크기가 달라도 동일한 표시 크기로 맞춤
+    // 모든 사람 캐릭터 이미지는 256×256 기준
     const targetSize =
       this.baseImageSize * this.playerScale;
 
@@ -168,15 +235,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // 실제 충돌 영역
     // =========================
 
-    const body = this.body as Phaser.Physics.Arcade.Body;
+    const body =
+      this.body as Phaser.Physics.Arcade.Body;
 
-    // 원본 PNG 크기에 비례하여 충돌 영역 설정
+    // 원본 이미지 크기에 비례하여 충돌 영역 설정
     const bodyWidth =
-      imageWidth *
+      this.width *
       (this.collisionWidth / this.baseImageSize);
 
     const bodyHeight =
-      imageHeight *
+      this.height *
       (this.collisionHeight / this.baseImageSize);
 
     // 캐릭터 몸체 전체를 감싸는 충돌 영역
@@ -188,11 +256,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // 충돌 영역을 이미지 중앙에 배치하고
     // 이미지 맨 아래의 투명 여백은 일부 제외
     body.setOffset(
-      (imageWidth - bodyWidth) / 2,
-      imageHeight -
+      (this.width - bodyWidth) / 2,
+
+      this.height -
         bodyHeight -
-        imageHeight *
-          (this.collisionBottomOffset / this.baseImageSize)
+        this.height *
+          (
+            this.collisionBottomOffset /
+            this.baseImageSize
+          )
     );
   }
 }

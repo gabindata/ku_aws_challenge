@@ -101,6 +101,12 @@ export class PreloadScene extends Phaser.Scene {
     // 스테이지 1 리소스
     // =========================
 
+    // 양점장 2D 캐릭터
+    this.load.image(
+      'manager-yang-2d',
+      '/assets/images/npc-portraits/manager-yang/manager-yang-2d.png'
+    );
+
     this.load.image(
       'stage1-bg',
       'assets/images/stage1/convenience-store-bg.png'
@@ -120,6 +126,12 @@ export class PreloadScene extends Phaser.Scene {
     // =========================
     // 스테이지 2 리소스
     // =========================
+
+    // 한조교 2D 캐릭터
+    this.load.image(
+      'assistant-han-2d',
+      '/assets/images/npc-portraits/assistant-han/assistant-han-2d.png'
+    );
 
     this.load.image(
       'stage2-bg',

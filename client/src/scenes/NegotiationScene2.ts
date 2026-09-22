@@ -5,6 +5,7 @@ import { DialogueBox } from '../ui/DialogueBox';
 import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
 import { TTSManager } from '../systems/TTSManager';
+import { BackButton } from '../ui/BackButton';
 
 /** 스테이지 2 — 학과 사무실 한조교 협상 화면 */
 export class NegotiationScene2 extends Phaser.Scene {
@@ -44,6 +45,17 @@ export class NegotiationScene2 extends Phaser.Scene {
 
     background.setDisplaySize(width, height);
     background.setDepth(-10);
+
+    // =========================
+    // 뒤로가기 버튼
+    // 협상 화면 → 학과 사무실 내부
+    // =========================
+
+    new BackButton(this, () => {
+      this.timerEvent?.remove();
+
+      this.scene.start(SceneKey.DepartmentOffice);
+    });
 
     // =========================
     // 한조교 캐릭터
@@ -141,7 +153,7 @@ export class NegotiationScene2 extends Phaser.Scene {
     try {
       await this.ttsManager.speak(
         text,
-        'assistant_han'
+        'ta_han'
       );
     } catch (error) {
       console.error(

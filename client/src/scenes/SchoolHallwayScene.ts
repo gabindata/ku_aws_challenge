@@ -378,7 +378,7 @@ export class SchoolHallwayScene extends Phaser.Scene {
       // 왼쪽 문 → 학과 사무실
       if (nearOffice) {
         this.scene.start(SceneKey.DepartmentOffice, {
-          npcId: 'assistant_han',
+          npcId: 'ta_han',
         });
 
         return;

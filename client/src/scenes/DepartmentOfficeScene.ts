@@ -66,27 +66,27 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'filing-cabinets',
     left: 155,
-    top: 100,
+    top: 90,
     width: 265,
-    height: 134,
+    height: 114,
   },
 
   // 서류 보관장
   {
     name: 'document-cabinet',
     left: 450,
-    top: 100,
+    top: 90,
     width: 240,
-    height: 134,
+    height: 114,
   },
 
   // 중앙 수납장
   {
     name: 'upper-storage',
     left: 1060,
-    top: 180,
+    top: 150,
     width: 225,
-    height: 55,
+    height: 45,
   },
 
   // 오른쪽 위 화분
@@ -95,7 +95,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     left: 1730,
     top: 125,
     width: 100,
-    height: 180,
+    height: 90,
   },
 
   // =========================
@@ -128,9 +128,9 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'office-desks',
     left: 385,
-    top: 430,
+    top: 440,
     width: 1030,
-    height: 420,
+    height: 350,
   },
 
   // =========================
@@ -334,10 +334,10 @@ export class DepartmentOfficeScene extends Phaser.Scene {
           width,
           height,
 
-          // 충돌 영역 색상
-          0xff1744,
+          // 충돌 영역 빨간색 표시
+          0xff0000,
 
-          // 빨간색 표시 숨김
+          // 충돌 영역 투명도
           SHOW_COLLISION_DEBUG ? 0.45 : 0
         )
         .setDepth(5000)

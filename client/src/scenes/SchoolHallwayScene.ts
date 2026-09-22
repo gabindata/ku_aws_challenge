@@ -44,7 +44,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     left: 680,
     top: 0,
     width: 370,
-    height: 135,
+    height: 93,
   },
 
   // =========================
@@ -88,15 +88,16 @@ const BLOCKED_AREAS: BlockedArea[] = [
   },
 
   // =========================
-  // 4. 왼쪽 가구
+  // 4. 왼쪽 가구 // 충돌영역 설정안해도 벽때문에 물리적으로 못 감. 
+  // 그래서 height:0 으로 설정
   // =========================
 
   {
     name: 'left-sofa',
     left: 135,
-    top: 430,
+    top: 390,
     width: 225,
-    height: 50,
+    height: 0,
   },
 
   {
@@ -104,27 +105,28 @@ const BLOCKED_AREAS: BlockedArea[] = [
     left: 390,
     top: 390,
     width: 65,
-    height: 80,
+    height: 0,
   },
 
   // =========================
   // 5. 오른쪽 가구
+  // 왼쪽 가구와 마찬가지 height:0으로 설정
   // =========================
 
   {
     name: 'right-sofa',
     left: 1355,
-    top: 430,
+    top: 395,
     width: 205,
-    height: 50,
+    height: 0,
   },
 
   {
     name: 'right-plant-left',
     left: 1280,
-    top: 390,
+    top: 395,
     width: 65,
-    height: 80,
+    height: 0,
   },
 
   {
@@ -132,7 +134,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     left: 1575,
     top: 395,
     width: 65,
-    height: 80,
+    height: 0,
   },
 
   // =========================
@@ -411,10 +413,10 @@ export class SchoolHallwayScene extends Phaser.Scene {
           width,
           height,
 
-          // 충돌 영역 색상
-          0xff1744,
+          // 충돌 영역 빨간색 표시
+          0xff0000,
 
-          // 빨간색 표시 숨김
+          // 충돌 영역 투명도
           SHOW_COLLISION_DEBUG ? 0.45 : 0
         )
         .setDepth(5000)

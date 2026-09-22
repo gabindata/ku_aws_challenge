@@ -59,7 +59,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     name: 'north-east-center',
     left: 1190,
     top: 0,
-    width: 155,
+    width: 150,
     height: 358,
   },
 
@@ -73,7 +73,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
 
   {
     name: 'north-east',
-    left: 1405,
+    left: 1407,
     top: 0,
     width: 267,
     height: 358,
@@ -84,7 +84,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     name: 'south-west-left',
     left: 0,
     top: 570,
-    width: 640,
+    width: 670,
     height: 371,
   },
 
@@ -98,7 +98,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
 
   {
     name: 'south-west-right',
-    left: 730,
+    left: 735,
     top: 570,
     width: 355,
     height: 371,
@@ -106,7 +106,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
 
   {
     name: 'south-east',
-    left: 1281,
+    left: 1290,
     top: 570,
     width: 391,
     height: 371,
@@ -199,9 +199,7 @@ export class StageSelectScene extends Phaser.Scene {
 
     this.interactionZones = [];
 
-    this.collisionDebugVisible =
-      new URLSearchParams(window.location.search)
-        .get('collisionDebug') === '1';
+  
 
     // =========================
     // 기본 배경
@@ -588,8 +586,8 @@ export class StageSelectScene extends Phaser.Scene {
             (area.top + area.height / 2) * scaleY,
             width,
             height,
-            0xff1744,
-            this.collisionDebugVisible ? 0.48 : 0
+            0xff0000,
+            this.collisionDebugVisible ? 0.4 : 0
           )
           .setDepth(1000)
           .setName(`blocked-${area.name}`);
@@ -744,3 +742,4 @@ export class StageSelectScene extends Phaser.Scene {
     });
   }
 }
+

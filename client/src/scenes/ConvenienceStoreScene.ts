@@ -37,7 +37,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'center-shelf-left',
     left: 635,
-    top: 290,
+    top: 267,
     width: 160,
     height: 430,
   },
@@ -46,7 +46,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'center-shelf-right',
     left: 1120,
-    top: 290,
+    top: 267,
     width: 160,
     height: 430,
   },
@@ -251,7 +251,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
           height,
 
           // 충돌 영역은 보이지 않게 유지
-          0xff1744,
+          0xff0000,
           0
         )
         .setDepth(5000)

@@ -16,5 +16,12 @@ export const SceneKey = {
   StyleReport: 'StyleReportScene',
   ConvenienceStore: 'ConvenienceStore',
   DepartmentOffice: 'DepartmentOffice',
+  House: 'HouseScene',
   SchoolHallway: 'SchoolHallway',
 } as const;
+
+/** 이동 직전 장소와 정규화 좌표. 화면 크기가 달라도 같은 위치로 돌아온다. */
+export interface ReturnLocation {
+  scene: string;
+  position: { x: number; y: number };
+}

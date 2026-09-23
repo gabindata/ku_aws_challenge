@@ -1,81 +1,31 @@
 import Phaser from 'phaser';
 
-/** 마이크 버튼 — 누르는 동안 녹음(push-to-talk), 상태별 시각 피드백. */
+/** 이미지 마이크 버튼. 입력 잠금 및 녹음 상태는 기존 협상 흐름을 따른다. */
 export class MicButton extends Phaser.GameObjects.Container {
-  private buttonText: Phaser.GameObjects.Text;
+  private icon: Phaser.GameObjects.Image;
+  private label: Phaser.GameObjects.Text;
   private isDisabled = false;
-
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    onClick: () => void
-  ) {
+  constructor(scene: Phaser.Scene, x: number, y: number, onClick: () => void) {
     super(scene, x, y);
-
     scene.add.existing(this);
-
-    this.buttonText = scene.add.text(
-      0,
-      0,
-      '🎤 말하기',
-      {
-        fontSize: '30px',
-        color: '#ffffff',
-        backgroundColor: '#333333',
-        padding: {
-          x: 20,
-          y: 10,
-        },
-      }
-    );
-
-    this.buttonText.setOrigin(0.5);
-
-    this.buttonText.setInteractive({
-      useHandCursor: true,
-    });
-
-    this.buttonText.on('pointerdown', () => {
-      if (this.isDisabled) {
-        return;
-      }
-
-      onClick();
-    });
-
-    this.add(this.buttonText);
+    this.icon = scene.add.image(0, -8, 'mic-button').setDisplaySize(100, 100)
+      .setInteractive({ useHandCursor: true });
+    this.label = scene.add.text(0, 50, '말하기', {
+      fontFamily: 'YPairing', fontSize: '23px', color: '#ffffff', stroke: '#172332', strokeThickness: 4,
+    }).setOrigin(0.5, 0);
+    this.icon.on('pointerdown', () => { if (!this.isDisabled) onClick(); });
+    this.add([this.icon, this.label]);
+    this.setDepth(40);
   }
-
-  /** 녹음 상태 표시 */
   setRecording(on: boolean): void {
-    if (on) {
-      this.buttonText.setText('🎤 듣는 중...');
-      return;
-    }
-
-    this.buttonText.setText('🎤 말하기');
+    this.label.setText(on ? '듣는 중...' : '말하기');
+    if (on) this.icon.setTint(0x90e6ff); else this.icon.clearTint();
   }
-
-  /** 음성 인식 실패 후 재시도 상태 */
-  setRetry(): void {
-    this.buttonText.setText('🎤 다시 말하기');
-  }
-
-  /** 서버 응답 대기 중에는 입력을 막는다 */
+  setRetry(): void { this.label.setText('다시 말하기'); }
   setDisabled(disabled: boolean): void {
     this.isDisabled = disabled;
-
-    if (disabled) {
-      this.buttonText.disableInteractive();
-      this.buttonText.setAlpha(0.5);
-      return;
-    }
-
-    this.buttonText.setInteractive({
-      useHandCursor: true,
-    });
-
-    this.buttonText.setAlpha(1);
+    if (disabled) this.icon.disableInteractive();
+    else this.icon.setInteractive({ useHandCursor: true });
+    this.setAlpha(disabled ? 0.55 : 1);
   }
 }

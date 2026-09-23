@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/gameConfig';
 import type {
+  ResultResponse,
   StagesResponse,
   StartRequest,
   StartResponse,
@@ -82,4 +83,16 @@ function mockStages(): StagesResponse {
       location: '동네 편의점', difficulty: 'easy', unlocked: true, recommended: true,
     },
   ];
+}
+
+export class ApiError extends Error {
+  constructor(public readonly status: number) { super(`서버 요청 실패: ${status}`); }
+}
+
+export async function getSessionResult(sessionId: string, signal?: AbortSignal): Promise<ResultResponse> {
+  const res = await fetch(`${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/result`, {
+    signal, cache: 'no-store',
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return res.json() as Promise<ResultResponse>;
 }

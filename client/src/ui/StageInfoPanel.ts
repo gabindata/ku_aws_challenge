@@ -42,15 +42,7 @@ export class StageInfoPanel {
     // 메인 정보창
     // =========================
 
-    const panel = scene.add.rectangle(
-      centerX,
-      centerY,
-      panelWidth,
-      panelHeight,
-      0x25283d
-    );
-
-    panel.setStrokeStyle(4, 0xffffff);
+    const panel = scene.add.image(centerX, centerY, 'stage-info-panel').setDisplaySize(panelWidth, panelHeight);
 
     // =========================
     // 스테이지 제목
@@ -82,7 +74,7 @@ export class StageInfoPanel {
         {
           fontFamily: 'YPairing',
           fontSize: '30px',
-          color: '#ffe29a',
+          color: '#263746',
         }
       )
       .setOrigin(0.5);
@@ -99,7 +91,7 @@ export class StageInfoPanel {
         {
           fontFamily: 'YPairing',
           fontSize: '24px',
-          color: '#ffffff',
+          color: '#263746',
           align: 'center',
           wordWrap: {
             width: panelWidth - 100,

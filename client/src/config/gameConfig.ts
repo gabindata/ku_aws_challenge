@@ -1,3 +1,4 @@
+import { HouseScene } from '../scenes/HouseScene';
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
 import { PreloadScene } from '../scenes/PreloadScene';
@@ -54,6 +55,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     ConvenienceStoreScene,
     DepartmentOfficeScene,
     SchoolHallwayScene,
+    HouseScene,
     ResultScene,
     StyleReportScene,
   ],

@@ -52,7 +52,11 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     // 설정 버튼
-    this.createMenuButton(width / 2, 870, '설정', () => {
+    const settings = this.add.image(width / 2, 900, 'settings-button')
+      .setDisplaySize(100, 100).setInteractive({ useHandCursor: true });
+    settings.on('pointerover', () => settings.setTint(0xbbeeff));
+    settings.on('pointerout', () => settings.clearTint());
+    settings.on('pointerdown', () => {
       if (!this.settingsPanel) {
         this.settingsPanel = new SettingsPanel(this, () => {
           this.settingsPanel = undefined;
@@ -77,13 +81,7 @@ export class MainMenuScene extends Phaser.Scene {
       )
       .setInteractive();
 
-    const popup = this.add.rectangle(
-      width / 2,
-      height / 2,
-      650,
-      300,
-      0xffffff
-    );
+    const popup = this.add.image(width / 2, height / 2, 'common-panel').setDisplaySize(650, 300);
 
     const message = this.add
       .text(
@@ -92,7 +90,7 @@ export class MainMenuScene extends Phaser.Scene {
         '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
         {
           fontSize: '28px',
-          color: '#000000',
+          color: '#ffffff',
           fontFamily: 'YPairing',
           align: 'center',
           lineSpacing: 10,

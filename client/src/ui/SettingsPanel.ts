@@ -28,13 +28,7 @@ export class SettingsPanel {
       .setInteractive();
 
     // 설정창 본체
-    const panel = scene.add.rectangle(
-      width / 2,
-      height / 2,
-      760,
-      650,
-      0x16244a
-    );
+    const panel = scene.add.image(width / 2, height / 2, 'common-panel').setDisplaySize(760, 650);
 
     // 설정 제목
     const title = scene.add

@@ -186,6 +186,12 @@ export class DepartmentOfficeScene extends Phaser.Scene {
     super(SceneKey.DepartmentOffice);
   }
 
+  private returnPosition?: { x: number; y: number };
+
+  init(data: { returnPosition?: { x: number; y: number } } = {}): void {
+    this.returnPosition = data.returnPosition;
+  }
+
   create(): void {
     const { width, height } = this.scale;
 
@@ -215,6 +221,10 @@ export class DepartmentOfficeScene extends Phaser.Scene {
       0.9,
       450
     );
+
+    if (this.returnPosition) {
+      this.player.setPosition(width * this.returnPosition.x, height * this.returnPosition.y);
+    }
 
     // =========================
     // 한조교 2D 캐릭터 생성
@@ -378,6 +388,9 @@ export class DepartmentOfficeScene extends Phaser.Scene {
         this.scene.start(SceneKey.Negotiation2, {
           npcId: 'ta_han',
           stageId: 2,
+          returnTo: { scene: SceneKey.DepartmentOffice, position: {
+            x: this.player.x / width, y: this.player.y / height,
+          } },
         });
       },
     });

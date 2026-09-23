@@ -143,6 +143,12 @@ export class ConvenienceStoreScene extends Phaser.Scene {
     super(SceneKey.ConvenienceStore);
   }
 
+  private returnPosition?: { x: number; y: number };
+
+  init(data: { returnPosition?: { x: number; y: number } } = {}): void {
+    this.returnPosition = data.returnPosition;
+  }
+
   create(): void {
     const { width, height } = this.scale;
 
@@ -174,6 +180,10 @@ export class ConvenienceStoreScene extends Phaser.Scene {
 
     // 플레이어를 양점장보다 앞에 표시
     this.player.setDepth(6000);
+
+    if (this.returnPosition) {
+      this.player.setPosition(width * this.returnPosition.x, height * this.returnPosition.y);
+    }
 
     // =========================
     // 양점장 2D 캐릭터 생성
@@ -293,6 +303,9 @@ export class ConvenienceStoreScene extends Phaser.Scene {
         this.scene.start(SceneKey.Negotiation1, {
           npcId: 'store_owner_yang',
           stageId: 1,
+          returnTo: { scene: SceneKey.ConvenienceStore, position: {
+            x: this.player.x / width, y: this.player.y / height,
+          } },
         });
       },
     });

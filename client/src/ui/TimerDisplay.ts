@@ -15,16 +15,7 @@ export class TimerDisplay extends Phaser.GameObjects.Container {
     scene.add.existing(this);
 
     // 배경
-    const background = scene.add.rectangle(
-      0,
-      0,
-      220,
-      90,
-      0x000000,
-      0.75
-    );
-
-    background.setStrokeStyle(2, 0xffffff);
+    const background = scene.add.image(0, 0, 'common-panel').setDisplaySize(220, 100);
 
     // "남은 시간"
     this.labelText = scene.add.text(

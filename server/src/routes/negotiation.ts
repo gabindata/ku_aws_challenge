@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { listStages } from '../services/npcPersonaService';
-import { processTurn, startNegotiation, type RunResult } from '../services/negotiationRunner';
+import { getResult, processTurn, startNegotiation, type RunResult } from '../services/negotiationRunner';
 
 /** HTTP만 다룬다. 협상 절차는 services/negotiationRunner.ts에 있다. */
 export const negotiationRouter = Router();
@@ -41,4 +41,10 @@ negotiationRouter.post('/negotiation/turn', async (req, res) => {
     return res.status(400).json({ error: 'sessionId·requestId·messageId·playerText가 필요합니다' });
   }
   send(res, await processTurn({ sessionId, requestId, messageId, playerText }));
+});
+
+// GET /api/sessions/:sessionId/result
+// 결과 화면이 리포트를 기다릴 때, 그리고 새로고침 뒤 복구할 때 쓴다.
+negotiationRouter.get('/sessions/:sessionId/result', (req, res) => {
+  send(res, getResult(req.params.sessionId));
 });

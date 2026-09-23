@@ -5,6 +5,7 @@ import type {
   EndReason,
   NegotiationView,
   Outcome,
+  ReportStatus,
   SessionStatus,
   TimerStatus,
   Turn,
@@ -58,6 +59,12 @@ export interface Session {
    */
   fatalTurnIds: string[];
   styleReport: StyleReport | null;
+  /** 리포트 생성 상태. 종료 전에는 null이다 */
+  reportStatus: ReportStatus | null;
+  /** 생성이 이미 시작됐는지. 결과를 반복 조회해도 다시 시작되지 않게 한다 */
+  reportStarted: boolean;
+  /** 보관 기간이 끝나면 세션을 지우는 타이머 */
+  disposeTimer: NodeJS.Timeout | null;
 
   // ── 멱등성 (공통규칙 §3) ──
   /**
@@ -133,6 +140,9 @@ export function createSession(input: CreateSessionInput): Session {
     llmCallCount: 0,
     repairRequestCount: 0,
     reportCallCount: 0,
+    reportStatus: null,
+    reportStarted: false,
+    disposeTimer: null,
     styleSignals: [],
     fatalTurnIds: [],
     styleReport: null,
@@ -275,12 +285,49 @@ export function remainingSeconds(session: Session): number | null {
   return Math.max(0, Math.ceil((session.deadlineAtMs - Date.now()) / 1000));
 }
 
+/**
+ * 종료 후 세션을 얼마나 들고 있을지 (공통규칙 §3·§11).
+ *
+ * 결과 화면을 보는 동안, 그리고 새로고침 뒤 다시 조회할 동안은 남아 있어야 한다.
+ * 조회한다고 기간이 늘어나지는 않는다.
+ */
+export const SESSION_RETENTION_MS = 30 * 60 * 1000;
+
+/**
+ * 리포트 생성이 끝났음을 기록하고, 이때부터 보관 기간을 센다.
+ *
+ * 기준을 종료 시각이 아니라 리포트 확정 시각으로 잡는 이유는,
+ * 생성이 오래 걸린 세션이 그만큼 일찍 지워지면 안 되기 때문이다.
+ */
+export function finishReport(sessionId: string, status: ReportStatus): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  session.reportStatus = status;
+  if (session.endView) {
+    session.endView.reportStatus = status;
+    session.endView.styleReport = session.styleReport ?? undefined;
+  }
+  scheduleDispose(session);
+}
+
+function scheduleDispose(session: Session): void {
+  if (session.disposeTimer) clearTimeout(session.disposeTimer);
+  const timer = setTimeout(() => {
+    // 대화·리포트·요청 캐시가 세션과 함께 사라진다.
+    for (const requestId of session.requests.keys()) startRequests.delete(requestId);
+    sessions.delete(session.sessionId);
+  }, SESSION_RETENTION_MS);
+  timer.unref?.();
+  session.disposeTimer = timer;
+}
+
 export function markEnded(sessionId: string, outcome: Outcome, endReason: EndReason): void {
   const session = requireSession(sessionId);
   session.outcome = outcome;
   session.endReason = endReason;
   session.status = 'ended';
   session.timerStatus = 'paused';
+  session.reportStatus = 'pending';
   if (session.expiryTimer) clearTimeout(session.expiryTimer);
   session.expiryTimer = null;
 }

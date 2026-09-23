@@ -37,6 +37,19 @@ export interface Turn {
  */
 export type SessionStatus = 'ready' | 'in_progress' | 'ended';
 
+/**
+ * 말투 리포트 생성 상태 (공통규칙 §9).
+ *
+ * 종료 결과와 리포트 생성은 분리한다. 종료가 확정되면 결과·문구·보상을
+ * 먼저 돌려주고 리포트를 기다리지 않는다. 생성에 10초쯤 걸리기 때문에
+ * 같이 기다리면 플레이어가 성공했는지도 모른 채 빈 화면을 본다.
+ *
+ *   pending  생성 중. styleReport는 아직 null이다
+ *   ready    styleReport에 값이 있다
+ *   failed   두 번 다 실패했다. 화면은 안내 문구만 띄운다
+ */
+export type ReportStatus = 'pending' | 'ready' | 'failed';
+
 // ─────────────────────────────────────────────
 // 합의 상태 (공통규칙 §5·§6)
 // ─────────────────────────────────────────────
@@ -215,6 +228,9 @@ export interface NegotiationRewards {
  * 잔여 LLM 호출 횟수는 담지 않는다.
  */
 export interface NegotiationView {
+  /** 늦게 도착한 이전 세션의 응답을 구분하는 근거 (공통규칙 §9) */
+  sessionId: string;
+  stageId: number;
   outcome: Outcome;
   endReason: EndReason;
   npcReply: string;
@@ -244,8 +260,28 @@ export interface NegotiationView {
    * 튜토리얼의 "다시 하기만" 화면을 그리려면 클라이언트가 알아야 해서 싣는다.
    */
   onClose?: FailureCloseBehavior;
-  /** 성공·실패 공통 */
+  /**
+   * 리포트 생성 상태. 종료 응답에만 실린다.
+   * pending이면 styleReport가 아직 없으므로 결과 조회로 다시 가져간다.
+   */
+  reportStatus?: ReportStatus;
+  /** 성공·실패 공통. reportStatus가 ready일 때만 값이 있다 */
   styleReport?: StyleReport;
+}
+
+/**
+ * GET /api/sessions/{sessionId}/result 응답 (공통규칙 §9).
+ *
+ * 진행 중이면 상태와 남은 시간만, 종료됐으면 종료 응답을 그대로 돌려준다.
+ * 조회는 LLM 호출도 보상 지급도 세션 재시작도 일으키지 않는다.
+ */
+export interface ResultResponse {
+  sessionId: string;
+  stageId: number;
+  sessionStatus: SessionStatus;
+  remainingSeconds: number | null;
+  /** sessionStatus가 ended일 때만 */
+  view: NegotiationView | null;
 }
 
 // ─────────────────────────────────────────────
@@ -286,9 +322,7 @@ export interface StartRequest extends IdempotentRequest {
    */
   worldState?: string[];
 }
-export interface StartResponse extends NegotiationView {
-  sessionId: string;
-}
+export type StartResponse = NegotiationView;
 
 /** POST /api/negotiation/turn */
 export interface TurnRequest extends IdempotentRequest {

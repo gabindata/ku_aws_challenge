@@ -2,6 +2,7 @@ import type {
   EndReason,
   NegotiationView,
   Outcome,
+  ResultResponse,
   StartResponse,
 } from '../../../shared/types/negotiationTypes';
 import {
@@ -11,6 +12,7 @@ import {
   extendDeadline,
   getSession,
   incrementLlmCallCount,
+  finishReport,
   markEnded,
   playerTurns,
   recordFatalTurn,
@@ -88,10 +90,9 @@ export function startNegotiation(input: {
       scheduleExpiry(session);
     }
 
-    return ok<StartResponse>({
-      sessionId: session.sessionId,
-      ...progressView(session, stage, 'in_progress', null, openingText, stage.defaultExpressionKey),
-    });
+    return ok<StartResponse>(
+      progressView(session, stage, 'in_progress', null, openingText, stage.defaultExpressionKey),
+    );
   });
 }
 
@@ -294,16 +295,10 @@ async function finish(
 
   markEnded(session.sessionId, outcome, endReason);
 
-  const turns = playerTurns(session);
-  // 유효 발화가 0개면 종료 LLM을 부르지 않고 서버가 종료 사실만 한 줄로 적는다.
-  const narrative = turns.length === 0
-    ? { title: '', titleNote: '', highlights: [], summary: silentSummary(endReason) }
-    : await generateNarrative({ stage, session, outcome, endReason, playerTurns: turns, signals: session.styleSignals });
-
-  session.styleReport = buildReport(turns, session.styleSignals, narrative);
-
   const success = outcome === 'success';
   const view: NegotiationView = {
+    sessionId: session.sessionId,
+    stageId: session.stageId,
     outcome,
     endReason,
     npcReply,
@@ -317,10 +312,48 @@ async function finish(
     limitText: endReason === 'limit' ? stage.limitText : null,
     rewards: success ? buildRewards(stage) : null,
     onClose: stage.onFailureClose ?? 'world_map',
-    styleReport: session.styleReport,
+    reportStatus: 'pending',
+    styleReport: undefined,
   };
   session.endView = view;
+
+  // 리포트는 기다리지 않는다 (공통규칙 §9). 생성에 10초쯤 걸려서
+  // 같이 기다리면 플레이어가 성공했는지도 모른 채 빈 화면을 본다.
+  // 완료되면 endView를 갱신하고, 클라이언트는 결과 조회로 가져간다.
+  void startReport(session, stage, outcome, endReason);
+
   return view;
+}
+
+/**
+ * 리포트를 뒤에서 만든다.
+ *
+ * 세션당 한 번만 돈다. 결과 조회가 반복돼도 생성이 다시 시작되지 않는다.
+ * 실패해도 종료 결과는 이미 나간 뒤라 게임 진행에 영향이 없다.
+ */
+async function startReport(
+  session: Session,
+  stage: StageDefinition,
+  outcome: Outcome,
+  endReason: EndReason,
+): Promise<void> {
+  if (session.reportStarted) return;
+  session.reportStarted = true;
+
+  try {
+    const turns = playerTurns(session);
+    // 유효 발화가 0개면 종료 LLM을 부르지 않고 서버가 종료 사실만 한 줄로 적는다.
+    const narrative = turns.length === 0
+      ? { title: '', titleNote: '', highlights: [], summary: silentSummary(endReason) }
+      : await generateNarrative({ stage, session, outcome, endReason, playerTurns: turns, signals: session.styleSignals });
+
+    session.styleReport = buildReport(turns, session.styleSignals, narrative);
+    finishReport(session.sessionId, 'ready');
+  } catch (err) {
+    // generateNarrative는 보통 null을 돌려주지만, 예기치 못한 오류도 종료를 막지 않는다.
+    console.error('[report] 생성 중 오류', err);
+    finishReport(session.sessionId, 'failed');
+  }
 }
 
 function progressView(
@@ -332,6 +365,8 @@ function progressView(
   expressionKey: string,
 ): NegotiationView {
   return {
+    sessionId: session.sessionId,
+    stageId: session.stageId,
     outcome,
     endReason,
     npcReply,
@@ -341,4 +376,27 @@ function progressView(
     expressionKey: resolveExpressionKey(stage, expressionKey),
     hintText: null,
   };
+}
+
+/**
+ * 결과 조회 (공통규칙 §9).
+ *
+ * 진행 중이면 상태와 남은 시간만, 종료됐으면 종료 응답을 그대로 돌려준다.
+ * 읽기 전용이다. LLM을 부르지도, 보상을 주지도, 세션을 되살리지도 않는다.
+ *
+ * 리포트가 아직 pending이면 클라이언트가 이 조회를 다시 해서 가져간다.
+ * 반복 조회로 생성이 다시 시작되지는 않는다 (reportStarted 플래그).
+ */
+export function getResult(sessionId: string): RunResult<ResultResponse> {
+  const session = getSession(sessionId);
+  // 30분 보관이 지났거나 서버를 재시작한 경우다. 정상적으로 발생한다.
+  if (!session) return fail(404, 'SESSION_NOT_FOUND');
+
+  return ok<ResultResponse>({
+    sessionId: session.sessionId,
+    stageId: session.stageId,
+    sessionStatus: session.status,
+    remainingSeconds: remainingSeconds(session),
+    view: session.status === 'ended' ? session.endView : null,
+  });
 }

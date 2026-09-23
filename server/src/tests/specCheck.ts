@@ -9,9 +9,15 @@
 process.env.LLM_MODE = 'stub';
 
 import { startNegotiation, processTurn, getResult } from '../services/negotiationRunner';
-import { getSession, SESSION_RETENTION_MS } from '../models/session';
+import {
+  appendNpcTurn,
+  appendPlayerTurn,
+  getSession,
+  rememberProposal,
+  SESSION_RETENTION_MS,
+} from '../models/session';
 import { getStage, loadAllStages } from '../services/npcPersonaService';
-import { buildRewards, activeWorldStateReferences } from '../services/negotiationEngine';
+import { applyJudgements, buildRewards, activeWorldStateReferences } from '../services/negotiationEngine';
 import {
   MAX_LLM_CALLS_PER_SESSION,
   MAX_REPAIR_REQUESTS_PER_SESSION,
@@ -199,6 +205,116 @@ async function asyncReport(): Promise<void> {
   ok('없는 세션 → 404 SESSION_NOT_FOUND', !gone.ok && gone.status === 404 && gone.error === 'SESSION_NOT_FOUND');
 }
 
+async function selfProposal(): Promise<void> {
+  // 스테이지 3 회귀 테스트 「청소 기한 재확인 수락」
+  //   "쓰레기봉투 내놓을게요" → (대화 몇 턴) → NPC "토요일까지?" → "네"
+  // 앞선 제안이 최근 6왕복 밖으로 밀려도 근거가 살아 있어야 한다.
+  const stage = getStage(3)!;
+  const key = stage.requiredAgreementKeys.find((k) => stage.agreementDefinitions[k].playerMustPropose)!;
+  ok('스테이지 3에 자발 제안 키 있음', !!key);
+
+  const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('자발 제안 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  const sess = getSession(sid)!;
+
+  // 1. 플레이어가 스스로 제안한다 (아직 성립은 아니다)
+  const proposal = appendPlayerTurn(sid, id('m'), '다음 주에 쓰레기봉투 내놓을게요');
+  rememberProposal(sid, key, [proposal.id]);
+  ok('제안이 보관됨', sess.pendingProposals[key]?.turnIds[0] === proposal.id);
+  ok('  원문도 함께', sess.pendingProposals[key]?.texts[0] === '다음 주에 쓰레기봉투 내놓을게요');
+
+  // 2. 대화가 6왕복 넘게 이어져 제안이 최근 기록 밖으로 밀린다
+  for (let i = 0; i < 7; i += 1) {
+    appendNpcTurn(sid, '그래서 언제 치울 건데.');
+    appendPlayerTurn(sid, id('m'), '네 알겠습니다.');
+  }
+  const last = sess.turns.filter((t) => t.speaker === 'player').at(-1)!;
+  const built = buildJudgePrompt({
+    session: sess, stage, playerTurn: last,
+    worldStateReferences: {}, nearCallLimit: false, finalCall: false,
+  }, MAX_PROMPT_TOKENS);
+  ok('6왕복 밖이어도 제안이 프롬프트에 남음',
+    !!built && built.user.includes('다음 주에 쓰레기봉투 내놓을게요'));
+  ok('  제안 발화 ID도 실림', !!built && built.user.includes(proposal.id));
+
+  // 3. NPC 재확인을 수락한다. 이번 발화에는 제안이 없지만 강등되면 안 된다
+  const accept = appendPlayerTurn(sid, id('m'), '네, 그렇게 할게요');
+  const npc = appendNpcTurn(sid, '토요일까지 가능한가?');
+  const merged = applyJudgements(sess, stage, {
+    npcReply: '', disclosureUpdates: {}, stageVerdict: 'continue',
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+    expressionKey: stage.defaultExpressionKey,
+    styleSignals: { formality: 'polite', directness: 'direct', cushion: { used: false, expressions: [] }, stageTags: [], evidenceTurnId: accept.id },
+    judgements: {
+      [key]: {
+        action: 'confirm', agreementSummary: '쓰레기봉투 배출', reason: '앞선 제안을 유지하며 기한 수락',
+        evidenceTurnIds: [accept.id], contextAnchorTurnId: null,
+        // 이번 발화에는 제안이 없다. 앞선 제안을 근거로 든다
+        selfProposed: true, selfProposalTurnIds: [proposal.id],
+      },
+    },
+  }, accept.id);
+
+  ok('앞선 제안을 근거로 성립', sess.agreements[key].status === 'met', sess.agreements[key].status);
+  ok('  강등되지 않음', merged.selfProposalMissingKeys.length === 0, merged.selfProposalMissingKeys.join());
+  ok('  제안 근거가 상태에 보존됨', sess.agreements[key].selfProposalTurnIds.includes(proposal.id));
+
+  // 4. 제안이 전혀 없는 키는 여전히 막혀야 한다
+  const other = stage.requiredAgreementKeys.find(
+    (k) => k !== key && stage.agreementDefinitions[k].playerMustPropose,
+  )!;
+  const blocked = applyJudgements(sess, stage, {
+    npcReply: '', disclosureUpdates: {}, stageVerdict: 'continue',
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+    expressionKey: stage.defaultExpressionKey,
+    styleSignals: { formality: 'polite', directness: 'direct', cushion: { used: false, expressions: [] }, stageTags: [], evidenceTurnId: accept.id },
+    judgements: {
+      [other]: {
+        action: 'confirm', agreementSummary: '시키는 대로', reason: 'NPC 제안 수락',
+        evidenceTurnIds: [accept.id], contextAnchorTurnId: null,
+        selfProposed: false, selfProposalTurnIds: [],
+      },
+    },
+  }, accept.id);
+  ok('제안 없이 수락만 하면 여전히 강등', blocked.selfProposalMissingKeys.includes(other));
+  ok('  상태는 met이 아님', sess.agreements[other].status !== 'met', sess.agreements[other].status);
+
+  // 5. 맥락 동의를 허용하지 않는 키는 NPC 제안에 기대 성립할 수 없다
+  const noConsent = stage.requiredAgreementKeys.find(
+    (k) => !stage.agreementDefinitions[k].contextConsentAllowed,
+  )!;
+  ok('스테이지 3에 맥락 동의 불가 키 있음', !!noConsent);
+  const anchored = applyJudgements(sess, stage, {
+    npcReply: '', disclosureUpdates: {}, stageVerdict: 'continue',
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+    expressionKey: stage.defaultExpressionKey,
+    styleSignals: { formality: 'polite', directness: 'direct', cushion: { used: false, expressions: [] }, stageTags: [], evidenceTurnId: accept.id },
+    judgements: {
+      [noConsent]: {
+        action: 'confirm', agreementSummary: 'NPC 제안 수락', reason: '맥락 동의',
+        evidenceTurnIds: [accept.id], contextAnchorTurnId: npc.id,
+        selfProposed: true, selfProposalTurnIds: [proposal.id],
+      },
+    },
+  }, accept.id);
+  ok('맥락 동의 불가 키는 앵커를 거부', anchored.evidenceMismatchKeys.includes(noConsent));
+  ok('  상태는 met이 아님', sess.agreements[noConsent].status !== 'met');
+
+  // 6. 철회하면 제안 근거도 버린다
+  applyJudgements(sess, stage, {
+    npcReply: '', disclosureUpdates: {}, stageVerdict: 'continue',
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+    expressionKey: stage.defaultExpressionKey,
+    styleSignals: { formality: 'polite', directness: 'direct', cushion: { used: false, expressions: [] }, stageTags: [], evidenceTurnId: accept.id },
+    judgements: {
+      [key]: { action: 'revoke', reason: '앞말을 뒤집음', evidenceTurnIds: [accept.id], contextAnchorTurnId: null },
+    },
+  }, accept.id);
+  ok('철회하면 제안 근거도 버림', sess.pendingProposals[key] === undefined);
+  ok('  상태도 unmet', sess.agreements[key].status === 'unmet');
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -248,6 +364,7 @@ async function main(): Promise<void> {
   await persona();
   await budgets();
   await callCeiling();
+  await selfProposal();
   await asyncReport();
   await idempotency();
   await privacy();

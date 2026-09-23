@@ -5,6 +5,7 @@ import type {
   EndReason,
   NegotiationView,
   Outcome,
+  PendingProposal,
   ReportStatus,
   SessionStatus,
   TimerStatus,
@@ -59,6 +60,11 @@ export interface Session {
    */
   fatalTurnIds: string[];
   styleReport: StyleReport | null;
+  /**
+   * 키별로 가장 최근의 자발 제안. 최근 6왕복 밖으로 밀려도 프롬프트에 남는다.
+   * 이게 없으면 제안과 최종 수락 사이에 대화가 끼었을 때 근거가 사라진다.
+   */
+  pendingProposals: Record<string, PendingProposal>;
   /** 리포트 생성 상태. 종료 전에는 null이다 */
   reportStatus: ReportStatus | null;
   /** 생성이 이미 시작됐는지. 결과를 반복 조회해도 다시 시작되지 않게 한다 */
@@ -118,7 +124,10 @@ export interface CreateSessionInput {
 export function createSession(input: CreateSessionInput): Session {
   const agreements: Record<string, AgreementState> = {};
   for (const key of input.requiredAgreementKeys) {
-    agreements[key] = { status: 'unmet', summary: null, evidenceTurnIds: [], lastAction: null, updatedAtMs: null };
+    agreements[key] = {
+      status: 'unmet', summary: null, evidenceTurnIds: [],
+      selfProposalTurnIds: [], lastAction: null, updatedAtMs: null,
+    };
   }
 
   const session: Session = {
@@ -140,6 +149,7 @@ export function createSession(input: CreateSessionInput): Session {
     llmCallCount: 0,
     repairRequestCount: 0,
     reportCallCount: 0,
+    pendingProposals: {},
     reportStatus: null,
     reportStarted: false,
     disposeTimer: null,
@@ -235,6 +245,24 @@ export function playerTurns(session: Session): Turn[] {
 
 export function setAgreement(sessionId: string, key: string, state: AgreementState): void {
   requireSession(sessionId).agreements[key] = state;
+}
+
+/**
+ * 자발 제안을 키별로 기록한다. 같은 키에 새 제안이 오면 최신으로 바꾼다.
+ * 판단은 하지 않는다. 어느 발화였는지와 그 원문만 들고 있는다.
+ */
+export function rememberProposal(sessionId: string, key: string, turnIds: string[]): void {
+  const session = requireSession(sessionId);
+  const texts = turnIds
+    .map((id) => session.turns.find((t) => t.id === id)?.text)
+    .filter((t): t is string => t !== undefined);
+  if (texts.length === 0) return;
+  session.pendingProposals[key] = { turnIds, texts, updatedAtMs: Date.now() };
+}
+
+/** 합의가 철회되면 그 키의 제안 근거도 함께 버린다. */
+export function forgetProposal(sessionId: string, key: string): void {
+  delete requireSession(sessionId).pendingProposals[key];
 }
 
 export function setDisclosedFact(sessionId: string, key: string, fact: DisclosedFact): void {

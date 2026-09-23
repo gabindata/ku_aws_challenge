@@ -126,6 +126,7 @@ function toTurnOutput(raw: JudgeOutput, playerTurnId: string): LlmTurnOutput {
       evidenceTurnIds: j.evidenceTurnIds,
       contextAnchorTurnId: j.contextAnchorTurnId,
       selfProposed: j.selfProposed,
+      selfProposalTurnIds: j.selfProposalTurnIds,
     };
   }
 

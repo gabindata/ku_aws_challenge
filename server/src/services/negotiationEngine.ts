@@ -8,6 +8,8 @@ import type {
 import type { StyleSignals } from '../../../shared/types/styleReportTypes';
 import {
   findPlayerTurn,
+  forgetProposal,
+  rememberProposal,
   isNpcTurnBefore,
   npcTurnBefore,
   setAgreement,
@@ -94,6 +96,12 @@ export function applyJudgements(
     // 맥락 동의 앵커가 키의 contextAnchorScope에 맞는 실제 NPC 메시지인지 확인한다.
     // 동의 대상이 분명한지, 안내가 변경·철회됐는지의 의미 판단은 LLM이 맡는다.
     if (judgement.contextAnchorTurnId != null) {
+      // 맥락 동의를 허용하지 않는 키다. NPC 제안에 기댄 성립을 받지 않는다 (공통규칙 §5).
+      // 불린 검사이므로 서버가 의미를 판단하는 것이 아니다.
+      if (!definition.contextConsentAllowed) {
+        result.evidenceMismatchKeys.push(key);
+        continue;
+      }
       const scope = definition.contextAnchorScope ?? 'immediate';
       const anchorOk = scope === 'session'
         ? isNpcTurnBefore(session.sessionId, judgement.contextAnchorTurnId, playerTurnId)
@@ -104,8 +112,25 @@ export function applyJudgements(
       }
     }
 
-    // 불린 값만 본다. 의미 판단이 아니므로 서버의 의미 판단 금지 원칙과 충돌하지 않는다.
-    if (action === 'confirm' && definition.playerMustPropose && judgement.selfProposed !== true) {
+    // 자발 제안 근거를 모은다. 이번 발화에서 나왔을 수도, 앞선 발화에서 나왔을 수도 있다.
+    // 실재하는 플레이어 발화인지만 본다. 제안이 충분한지는 판단하지 않는다.
+    const claimed = (judgement.selfProposalTurnIds ?? []).filter(
+      (id) => findPlayerTurn(session.sessionId, id) !== undefined,
+    );
+    const remembered = session.pendingProposals[key]?.turnIds ?? [];
+    const proposalTurnIds = claimed.length > 0 ? claimed : remembered;
+
+    // 이번 턴에 제안이 나왔으면 키별로 따로 보관한다.
+    // 최근 6왕복 밖으로 밀려도 프롬프트에 남아, 몇 턴 뒤의 수락을 판정할 수 있다.
+    if (claimed.length > 0) rememberProposal(session.sessionId, key, claimed);
+
+    // playerMustPropose 키는 NPC 제안을 수락하는 것만으로 성립하지 않는다 (공통규칙 §5).
+    //
+    // 다만 앞선 턴에서 이미 스스로 제안했다면, 뒤이은 재확인을 수락하는 것은
+    // 정당하다. 그래서 이번 발화의 selfProposed뿐 아니라 보관된 제안 근거도 본다.
+    // 둘 다 없을 때만 강등한다.
+    const proposedSelf = judgement.selfProposed === true || proposalTurnIds.length > 0;
+    if (action === 'confirm' && definition.playerMustPropose && !proposedSelf) {
       action = 'clarify';
       result.selfProposalMissingKeys.push(key);
     }
@@ -121,7 +146,12 @@ export function applyJudgements(
 
     if (action === 'revoke') {
       if (current?.status === 'unmet') continue;
-      setAgreement(session.sessionId, key, { status: 'unmet', summary: null, evidenceTurnIds: [], lastAction: 'revoke', updatedAtMs: now });
+      // 철회하면 그 키의 자발 제안 근거도 함께 버린다. 다시 제안해야 한다.
+      forgetProposal(session.sessionId, key);
+      setAgreement(session.sessionId, key, {
+        status: 'unmet', summary: null, evidenceTurnIds: [],
+        selfProposalTurnIds: [], lastAction: 'revoke', updatedAtMs: now,
+      });
       result.revokedKeys.push(key);
       continue;
     }
@@ -129,7 +159,8 @@ export function applyJudgements(
     const wasMet = current?.status === 'met';
     const summary = judgement.agreementSummary ?? null;
     setAgreement(session.sessionId, key, {
-      status: 'met', summary, evidenceTurnIds: judgement.evidenceTurnIds, lastAction: 'confirm', updatedAtMs: now,
+      status: 'met', summary, evidenceTurnIds: judgement.evidenceTurnIds,
+      selfProposalTurnIds: proposalTurnIds, lastAction: 'confirm', updatedAtMs: now,
     });
     if (!wasMet) result.newlyMetKeys.push(key);
     else if (current?.summary !== summary) result.updatedKeys.push(key);

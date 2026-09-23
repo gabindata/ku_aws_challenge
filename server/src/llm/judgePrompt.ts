@@ -57,6 +57,14 @@ const RULES = `당신은 한국어 협상 게임의 NPC이자 판정자입니다
 - 모호한 발화는 실패시키지 말고 한 번에 한 가지만 확인한다
 - expressionKey는 스테이지의 허용 목록에서만 고른다
 
+## 자발 제안
+- playerMustPropose 키는 플레이어가 스스로 꺼내야 성립한다. NPC 제안에 "네"만 해서는 안 된다
+- 플레이어가 구체적인 행동을 스스로 제안하면 selfProposalTurnIds에 그 발화 ID를 넣는다
+- confirm이 아니어도 넣는다. 기한이 모호해 clarify로 두더라도 제안 자체는 기록한다
+- 아래 「이미 나온 자발 제안」에 있는 키는 플레이어가 앞서 제안한 것이다.
+  그 제안을 유지한 채 재확인을 수락하면 selfProposed는 true이고,
+  selfProposalTurnIds에는 그 앞선 발화 ID를 넣는다. 행동을 복창하게 요구하지 않는다
+
 ## 안내 기록
 - 안내 키는 합의 키와 전혀 다른 목록이다. 합의 키를 disclosureUpdates에 넣지 않는다
 - 아래 「보존할 안내 항목」에 적힌 키만 쓴다. 그 항목이 없으면 항상 빈 배열이다
@@ -198,6 +206,10 @@ function userText(input: JudgeUserInput, exchangeLimit: number): string {
     return `- ${key}: ${a.status}${a.summary ? ` — ${a.summary}` : ''}`;
   }).join('\n');
 
+  const proposals = Object.entries(session.pendingProposals)
+    .map(([key, p]) => `- ${key}: ${p.turnIds.map((id, i) => `[${id}] "${p.texts[i]}"`).join(' / ')}`)
+    .join('\n');
+
   const facts = Object.entries(session.disclosedFacts)
     .map(([key, f]) => `- ${key} (${f.status}): ${f.summary} [근거 ${f.npcMessageId}: ${f.npcMessageText}]`)
     .join('\n');
@@ -212,6 +224,7 @@ function userText(input: JudgeUserInput, exchangeLimit: number): string {
 
   return [
     `## 현재 합의 상태\n${agreements}`,
+    proposals ? `\n## 이미 나온 자발 제안 (최근 대화 밖이어도 유효하다)\n${proposals}` : '',
     facts ? `\n## 지금까지 한 안내\n${facts}` : '',
     world ? `\n## 이 플레이어에 대해 아는 것 (대사에만 쓰고 판정에 쓰지 않는다. 세션당 한 번만 언급)\n${world}` : '',
     exchangeLimit > 0 ? `\n## 최근 대화\n${exchangesText(session, playerTurn.id, exchangeLimit)}` : '',

@@ -70,6 +70,24 @@ export type AgreementStatus = 'unmet' | 'met' | 'pending_reconfirm';
  */
 export type AgreementAction = 'confirm' | 'revoke' | 'clarify' | 'keep';
 
+/**
+ * 플레이어가 스스로 내놓은 제안 (공통규칙 §5·§8).
+ *
+ * playerMustPropose 키는 NPC 제안을 수락하는 것만으로는 성립하지 않는다.
+ * 그런데 제안과 최종 수락 사이에 대화가 몇 턴 끼면 제안이 최근 6왕복 밖으로
+ * 밀려 프롬프트에서 사라진다. 그러면 나중에 "네, 그렇게 할게요"라고 해도
+ * 판정 모델이 근거를 못 찾고, 서버는 자발 제안이 없다고 보아 강등한다.
+ *
+ * 그래서 제안이 나온 순간 키별로 따로 보관하고, 6왕복 밖이어도 프롬프트에 싣는다.
+ */
+export interface PendingProposal {
+  /** 제안이 나온 플레이어 발화 ID */
+  turnIds: string[];
+  /** 그 발화의 원문. 축약된 기록에서도 살아남아야 한다 */
+  texts: string[];
+  updatedAtMs: number;
+}
+
 export interface AgreementState {
   status: AgreementStatus;
   /**
@@ -78,6 +96,8 @@ export interface AgreementState {
    */
   summary: string | null;
   evidenceTurnIds: string[];
+  /** 이 키를 성립시킨 자발 제안의 근거 발화 ID. 없으면 빈 배열 */
+  selfProposalTurnIds: string[];
   lastAction: AgreementAction | null;
   updatedAtMs: number | null;
 }
@@ -106,6 +126,11 @@ export interface AgreementJudgement {
    * false면 서버가 confirm을 clarify로 강등한다.
    */
   selfProposed?: boolean | null;
+  /**
+   * 자발 제안이 나온 플레이어 발화 ID. 이번 발화일 수도, 앞선 발화일 수도 있다.
+   * 서버는 실재하는 플레이어 발화인지만 검증하고 의미는 판단하지 않는다.
+   */
+  selfProposalTurnIds?: string[] | null;
 }
 
 /**

@@ -48,6 +48,43 @@ export interface AgreementDefinition {
   memoGuide?: string;
 }
 
+/**
+ * NPC 페르소나 (각 스테이지 기획 §2 스토리 · §3 공개 정보 · §5 NPC 대사 규칙).
+ *
+ * 판정 기준표와 달리 이건 전부 "어떻게 말하는가"다. 판정에는 쓰이지 않고
+ * npcReply를 쓰는 데만 쓰인다. 이게 없으면 NPC가 기획서의 그 사람이 아니라
+ * 판정 기준표만 아는 일반 상담원처럼 말한다.
+ */
+export interface StagePersona {
+  /** §5 말투. 나이·성격·문장 길이 규칙 */
+  voice: string[];
+  /** §2 NPC 스토리. 왜 이 사람이 이런 태도인지 */
+  background?: string[];
+  /** §3 시작 시 공개. 묻지 않아도 알려도 되는 것 */
+  publicFromStart?: string[];
+  /** §3 공개 금지. 어떤 질문에도 말하지 않는다 */
+  neverReveal?: string[];
+  /** §5 정보 공개 표. 지정 대사가 있으면 그대로 쓴다 */
+  disclosures?: { when: string; say: string }[];
+  /** §5 정답 요구 대응. "뭘 약속하면 되냐"에 답을 주지 않고 할 말 */
+  answerDemand?: string[];
+  /** 자발 제안 키의 답을 대신 만들지 않도록, 직접 묻지 말아야 할 것 */
+  neverAsk?: string[];
+  /** 다른 스테이지의 축으로 새는 화제를 한 번 돌린다 (스테이지 3 월세) */
+  redirects?: { topic: string; say: string; then: string }[];
+  /** §5 마무리 대사. 호출 상한이 가까울 때 */
+  closing?: StageClosingLines;
+}
+
+export interface StageClosingLines {
+  /** 판정 호출 35회 시점 */
+  nearLimit: string;
+  /** 판정 호출 40회 시점. 조건 없이 하나면 이것 */
+  finalCall?: string;
+  /** 40회 시점을 필수 키 충족 여부로 나누는 스테이지 (스테이지 2) */
+  finalCallByOutcome?: { met: string; unmet: string };
+}
+
 export interface StageDefinition {
   stageId: number;
   npcId: string;
@@ -57,6 +94,8 @@ export interface StageDefinition {
    * (기획 확인 필요 항목)
    */
   npcName: string;
+  /** 어떻게 말하는가. 판정이 아니라 대사에만 쓰인다 */
+  persona?: StagePersona;
   location: string;
   difficulty: Difficulty;
 
@@ -296,6 +335,25 @@ export function validateStage(raw: unknown): string[] {
   for (const id of clueIds) {
     if (epilogue?.clueId !== id || typeof epilogue?.text !== 'string') {
       problems.push(`successRewards.clueIds의 ${id}에 대응하는 successEpilogue 본문 없음`);
+    }
+  }
+
+  // 페르소나는 선택이지만, 넣었다면 말투는 있어야 한다.
+  // 말투 없이 배경만 실으면 NPC가 사실만 읊고 사람처럼 말하지 않는다.
+  const persona = (raw as { persona?: unknown }).persona;
+  if (persona !== undefined) {
+    const p = persona as { voice?: unknown; closing?: { nearLimit?: unknown; finalCall?: unknown; finalCallByOutcome?: unknown } };
+    if (!Array.isArray(p.voice) || p.voice.length === 0) {
+      problems.push('persona.voice가 비어 있습니다');
+    }
+    if (p.closing) {
+      if (typeof p.closing.nearLimit !== 'string') problems.push('persona.closing.nearLimit이 없습니다');
+      // 마지막 대사는 조건 없는 것이거나 충족 여부로 나뉜 것이거나 하나여야 한다
+      const hasPlain = typeof p.closing.finalCall === 'string';
+      const hasSplit = !!p.closing.finalCallByOutcome;
+      if (hasPlain === hasSplit) {
+        problems.push('persona.closing은 finalCall과 finalCallByOutcome 중 하나만 가져야 합니다');
+      }
     }
   }
 

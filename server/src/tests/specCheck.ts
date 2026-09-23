@@ -19,7 +19,7 @@ import {
   MAX_PROMPT_TOKENS,
   MAX_OUTPUT_TOKENS,
 } from '../data/stageSchema';
-import { buildJudgePrompt } from '../llm/judgePrompt';
+import { buildJudgePrompt, buildJudgeSystem } from '../llm/judgePrompt';
 import { judgeConfig } from '../llm/config';
 import { estimateTokens } from '../services/reportInput';
 
@@ -69,6 +69,34 @@ async function stageData(): Promise<void> {
     Object.keys(activeWorldStateReferences(s3, ['part_time_job_secured'])).length === 1);
   ok('월드 상태 없으면 참조 없음',
     Object.keys(activeWorldStateReferences(s3, [])).length === 0);
+}
+
+async function persona(): Promise<void> {
+  // 각 스테이지 기획 §2·§3·§5 — 페르소나가 프롬프트에 실려야 한다
+  for (const stage of loadAllStages()) {
+    const p = stage.persona;
+    ok(`스테이지 ${stage.stageId} 페르소나 있음`, !!p);
+    if (!p) continue;
+    ok(`스테이지 ${stage.stageId} 말투`, p.voice.length > 0);
+    ok(`스테이지 ${stage.stageId} 마무리 대사`, !!p.closing?.nearLimit);
+    ok(`스테이지 ${stage.stageId} 마무리는 한 형태만`,
+      (typeof p.closing?.finalCall === 'string') !== !!p.closing?.finalCallByOutcome);
+
+    const system = buildJudgeSystem(stage);
+    ok(`스테이지 ${stage.stageId} 말투가 프롬프트에`, p.voice.every((v) => system.includes(v)));
+    ok(`스테이지 ${stage.stageId} 지정 대사가 프롬프트에`,
+      (p.disclosures ?? []).every((d) => system.includes(d.say)));
+    ok(`스테이지 ${stage.stageId} 공개 금지가 프롬프트에`,
+      (p.neverReveal ?? []).every((n) => system.includes(n)));
+    ok(`스테이지 ${stage.stageId} 마무리 대사가 프롬프트에`, system.includes(p.closing!.nearLimit));
+  }
+
+  // 페르소나는 대사용이다. 브라우저로 나가면 안 된다.
+  const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('페르소나 시나리오 시작', false);
+  const exposed = JSON.stringify(s.value);
+  ok('페르소나가 클라이언트로 안 나감',
+    !/persona|neverReveal|disclosures|answerDemand|closing/.test(exposed));
 }
 
 async function budgets(): Promise<void> {
@@ -217,6 +245,7 @@ async function privacy(): Promise<void> {
 
 async function main(): Promise<void> {
   await stageData();
+  await persona();
   await budgets();
   await callCeiling();
   await asyncReport();

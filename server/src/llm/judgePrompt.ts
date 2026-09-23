@@ -180,6 +180,11 @@ export function buildJudgeSystem(stage: StageDefinition): string {
 }
 
 export interface JudgeUserInput {
+  /**
+   * 직전 출력에서 서버가 잡은 문제. 수정 재요청일 때만 채운다 (공통규칙 §8).
+   * 같은 입력으로만 다시 물으면 같은 실패가 나오므로 무엇이 틀렸는지 함께 준다.
+   */
+  repairProblems?: string[];
   session: Session;
   stage: StageDefinition;
   playerTurn: Turn;
@@ -230,6 +235,11 @@ function userText(input: JudgeUserInput, exchangeLimit: number): string {
     exchangeLimit > 0 ? `\n## 최근 대화\n${exchangesText(session, playerTurn.id, exchangeLimit)}` : '',
     `\n## 이번 플레이어 발화\n[${playerTurn.id}] ${playerTurn.text}`,
     flags ? `\n## 이번 턴 지시\n${flags}` : '',
+    input.repairProblems && input.repairProblems.length > 0
+      ? `\n## 직전 출력의 문제 — 고쳐서 다시 답한다\n${
+          input.repairProblems.map((p) => `- ${p}`).join('\n')}\n` +
+        '위 문제만 고친다. 나머지 판정은 유지하고, 판정을 바꿨다면 npcReply도 그에 맞게 다시 쓴다.'
+      : '',
   ].filter(Boolean).join('\n');
 }
 

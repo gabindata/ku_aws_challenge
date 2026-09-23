@@ -61,9 +61,13 @@ function useStub(): boolean {
  * 상한을 넘으면 가장 오래된 왕복부터 제거한다. 고정 시스템 규칙,
  * 판정 기준표, 현재 합의 요약은 어떤 경우에도 자르지 않는다.
  */
-export async function evaluateTurn(input: EvaluateTurnInput): Promise<LlmTurnOutput> {
+export async function evaluateTurn(
+  input: EvaluateTurnInput,
+  /** 직전 출력에서 서버가 잡은 문제. 수정 재요청일 때만 넘긴다 */
+  repairProblems?: string[],
+): Promise<LlmTurnOutput> {
   if (useStub()) {
-    return stubEvaluateTurn(input.stage, input.session, input.playerTurnId, input.playerText);
+    return stubEvaluateTurn(input.stage, input.session, input.playerTurnId, input.playerText, repairProblems);
   }
 
   const config = judgeConfig();
@@ -71,6 +75,7 @@ export async function evaluateTurn(input: EvaluateTurnInput): Promise<LlmTurnOut
   if (!playerTurn) throw new Error(`판정 대상 발화를 찾을 수 없습니다: ${input.playerTurnId}`);
 
   const prompt = buildJudgePrompt({
+    repairProblems,
     session: input.session,
     stage: input.stage,
     playerTurn,

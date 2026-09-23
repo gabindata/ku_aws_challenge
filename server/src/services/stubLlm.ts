@@ -44,7 +44,12 @@ export function stubEvaluateTurn(
   session: Session,
   playerTurnId: string,
   playerText: string,
+  /** 수정 재요청이면 무엇이 틀렸는지. 가짜 LLM은 기록만 남기고 같은 답을 낸다 */
+  repairProblems?: string[],
 ): LlmTurnOutput {
+  if (repairProblems?.length) {
+    console.log(`[stub] 수정 재요청 받음: ${repairProblems.join(' | ')}`);
+  }
   const base = {
     disclosureUpdates: {},
     stageVerdict: 'continue' as const,

@@ -170,6 +170,95 @@ export function applyJudgements(
   return result;
 }
 
+/**
+ * 판정 출력에서 서버가 잡을 수 있는 문제를 모은다 (공통규칙 §6·§8).
+ *
+ * 상태를 바꾸지 않는다. 고쳐 달라고 다시 물을지 정하는 데만 쓴다.
+ * 여기서 찾는 것은 전부 ID 실재 여부와 불린 정합성이고, 의미 판단은 하지 않는다.
+ *
+ * 조용히 버리면 두 가지가 나빠진다. 화면에는 NPC가 수락하는 대사가 뜨는데
+ * 키는 채워지지 않아 플레이어가 무엇이 잘못됐는지 알 수 없고,
+ * 같은 출력 오류가 반복돼도 프롬프트가 나아지지 않는다.
+ */
+export function findOutputProblems(
+  session: Session,
+  stage: StageDefinition,
+  llm: LlmTurnOutput,
+  playerTurnId: string,
+): string[] {
+  const problems: string[] = [];
+
+  for (const [key, judgement] of Object.entries(llm.judgements)) {
+    const definition = stage.agreementDefinitions[key];
+    if (!definition || !stage.requiredAgreementKeys.includes(key)) {
+      problems.push(`judgements의 "${key}"는 이 스테이지의 합의 키가 아닙니다. 기준표에 있는 키만 씁니다.`);
+      continue;
+    }
+    if (judgement.action === 'keep') continue;
+
+    if (!hasValidEvidence(session, judgement.evidenceTurnIds)) {
+      problems.push(
+        `"${key}"의 evidenceTurnIds가 이 세션의 플레이어 발화 ID가 아닙니다 ` +
+        `(받은 값: ${JSON.stringify(judgement.evidenceTurnIds ?? [])}). 대화에 실제로 있는 ID를 넣습니다.`,
+      );
+    }
+
+    if (judgement.contextAnchorTurnId != null) {
+      if (!definition.contextConsentAllowed) {
+        problems.push(
+          `"${key}"는 맥락 동의를 허용하지 않는 키입니다. contextAnchorTurnId를 넣지 말고, ` +
+          '플레이어가 직접 말한 내용만으로 판단합니다.',
+        );
+      } else {
+        const scope = definition.contextAnchorScope ?? 'immediate';
+        const anchorOk = scope === 'session'
+          ? isNpcTurnBefore(session.sessionId, judgement.contextAnchorTurnId, playerTurnId)
+          : npcTurnBefore(session.sessionId, playerTurnId)?.id === judgement.contextAnchorTurnId;
+        if (!anchorOk) {
+          problems.push(
+            `"${key}"의 contextAnchorTurnId(${judgement.contextAnchorTurnId})가 ` +
+            `${scope === 'session' ? '이 세션의 앞선 NPC 메시지' : '직전 NPC 메시지'}가 아닙니다.`,
+          );
+        }
+      }
+    }
+
+    // 강등만 하고 넘어가면 화면에는 수락 대사가 뜬다. 대사까지 같이 고쳐야 한다.
+    if (judgement.action === 'confirm' && definition.playerMustPropose) {
+      const claimed = (judgement.selfProposalTurnIds ?? []).filter(
+        (id) => findPlayerTurn(session.sessionId, id) !== undefined,
+      );
+      const remembered = session.pendingProposals[key]?.turnIds ?? [];
+      if (judgement.selfProposed !== true && claimed.length === 0 && remembered.length === 0) {
+        problems.push(
+          `"${key}"는 플레이어가 스스로 제안해야 성립하는 키인데 자발 제안 근거가 없습니다. ` +
+          'confirm이 아니라 clarify로 판정하고, npcReply도 수락이 아니라 한 번 더 묻는 대사로 씁니다.',
+        );
+      }
+    }
+  }
+
+  // 치명적 행동은 근거와 유형이 함께 와야 한다 (공통규칙 §6).
+  if (llm.stageVerdict === 'fatal' || llm.fatalBehavior.detected) {
+    const { detected, type, evidenceTurnIds } = llm.fatalBehavior;
+    if (!detected) {
+      problems.push('stageVerdict가 fatal인데 fatalBehavior.detected가 false입니다. 둘을 맞춥니다.');
+    } else if (type === null || !FATAL_TYPES.has(type)) {
+      problems.push(
+        `fatalBehavior.type이 비었거나 허용 값이 아닙니다 (받은 값: ${JSON.stringify(type)}). ` +
+        `${[...FATAL_TYPES].join(' / ')} 중 하나를 넣습니다.`,
+      );
+    } else if (!hasValidEvidence(session, evidenceTurnIds)) {
+      problems.push(
+        'fatalBehavior.evidenceTurnIds가 이 세션의 플레이어 발화 ID가 아닙니다. ' +
+        '치명적 행동이 실제로 나온 발화 ID를 넣습니다.',
+      );
+    }
+  }
+
+  return problems;
+}
+
 function hasValidEvidence(session: Session, ids: string[] | undefined): boolean {
   if (!ids || ids.length === 0) return false;
   return ids.every((id) => findPlayerTurn(session.sessionId, id) !== undefined);

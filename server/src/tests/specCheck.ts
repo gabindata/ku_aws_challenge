@@ -17,7 +17,12 @@ import {
   SESSION_RETENTION_MS,
 } from '../models/session';
 import { getStage, loadAllStages } from '../services/npcPersonaService';
-import { applyJudgements, buildRewards, activeWorldStateReferences } from '../services/negotiationEngine';
+import {
+  applyJudgements,
+  buildRewards,
+  activeWorldStateReferences,
+  findOutputProblems,
+} from '../services/negotiationEngine';
 import {
   MAX_LLM_CALLS_PER_SESSION,
   MAX_REPAIR_REQUESTS_PER_SESSION,
@@ -315,6 +320,109 @@ async function selfProposal(): Promise<void> {
   ok('  상태도 unmet', sess.agreements[key].status === 'unmet');
 }
 
+async function repairContract(): Promise<void> {
+  // 공통규칙 §6·§8 — 형식은 맞지만 내용이 어긋난 출력은 조용히 버리지 않고
+  // 무엇이 틀렸는지 알려 한 번 더 묻는다.
+  const stage = getStage(3)!;
+  const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('수정 재요청 시나리오 시작', false);
+  const sess = getSession(s.value.sessionId)!;
+  const npc = appendNpcTurn(sess.sessionId, '토요일까지 치울 건가?');
+  const turn = appendPlayerTurn(sess.sessionId, id('m'), '네 알겠습니다');
+
+  const base = {
+    npcReply: '그래, 그렇게 하자.', disclosureUpdates: {}, stageVerdict: 'continue' as const,
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+    expressionKey: stage.defaultExpressionKey,
+    styleSignals: { formality: 'polite' as const, directness: 'direct' as const, cushion: { used: false, expressions: [] }, stageTags: [], evidenceTurnId: turn.id },
+  };
+  const selfKey = stage.requiredAgreementKeys.find((k) => stage.agreementDefinitions[k].playerMustPropose)!;
+  const consentKey = stage.requiredAgreementKeys.find((k) => stage.agreementDefinitions[k].contextConsentAllowed)!;
+  const noConsentKey = stage.requiredAgreementKeys.find((k) => !stage.agreementDefinitions[k].contextConsentAllowed)!;
+
+  // 정상 출력에는 문제가 없다
+  ok('정상 출력 → 재요청 없음', findOutputProblems(sess, stage, {
+    ...base, judgements: { [consentKey]: {
+      action: 'confirm', agreementSummary: '요약', reason: '이유',
+      evidenceTurnIds: [turn.id], contextAnchorTurnId: npc.id,
+    } },
+  }, turn.id).length === 0);
+
+  // 8번 — 근거 ID 오류
+  const badEvidence = findOutputProblems(sess, stage, {
+    ...base, judgements: { [consentKey]: {
+      action: 'confirm', agreementSummary: '요약', reason: '이유',
+      evidenceTurnIds: ['없는발화'], contextAnchorTurnId: null,
+    } },
+  }, turn.id);
+  ok('근거 ID 오류를 잡음', badEvidence.length === 1);
+  ok('  무엇이 틀렸는지 알려줌', badEvidence[0].includes('evidenceTurnIds') && badEvidence[0].includes('없는발화'));
+
+  // 7번 — 자발 제안 없는 confirm. 대사까지 고치라고 해야 한다
+  const noProposal = findOutputProblems(sess, stage, {
+    ...base, judgements: { [selfKey]: {
+      action: 'confirm', agreementSummary: '요약', reason: '이유',
+      evidenceTurnIds: [turn.id], contextAnchorTurnId: null,
+      selfProposed: false, selfProposalTurnIds: [],
+    } },
+  }, turn.id);
+  ok('자발 제안 없는 confirm을 잡음', noProposal.length === 1);
+  ok('  npcReply도 고치라고 알림', noProposal[0].includes('npcReply'));
+
+  // 맥락 동의 불가 키에 앵커를 건 경우
+  ok('맥락 동의 불가 키의 앵커를 잡음', findOutputProblems(sess, stage, {
+    ...base, judgements: { [noConsentKey]: {
+      action: 'confirm', agreementSummary: '요약', reason: '이유',
+      evidenceTurnIds: [turn.id], contextAnchorTurnId: npc.id,
+      selfProposed: true, selfProposalTurnIds: [turn.id],
+    } },
+  }, turn.id).some((p) => p.includes('맥락 동의')));
+
+  // 9번 — fatal인데 근거·유형이 없음
+  ok('fatal에 유형이 없으면 잡음', findOutputProblems(sess, stage, {
+    ...base, judgements: {}, stageVerdict: 'fatal',
+    fatalBehavior: { detected: true, type: null, evidenceTurnIds: [turn.id] },
+  }, turn.id).some((p) => p.includes('type')));
+  ok('fatal에 근거가 없으면 잡음', findOutputProblems(sess, stage, {
+    ...base, judgements: {}, stageVerdict: 'fatal',
+    fatalBehavior: { detected: true, type: 'threat', evidenceTurnIds: [] },
+  }, turn.id).some((p) => p.includes('evidenceTurnIds')));
+  ok('fatal인데 detected가 false면 잡음', findOutputProblems(sess, stage, {
+    ...base, judgements: {}, stageVerdict: 'fatal',
+    fatalBehavior: { detected: false, type: null, evidenceTurnIds: [] },
+  }, turn.id).some((p) => p.includes('detected')));
+  ok('정상 fatal은 문제 없음', findOutputProblems(sess, stage, {
+    ...base, judgements: {}, stageVerdict: 'fatal',
+    fatalBehavior: { detected: true, type: 'threat', evidenceTurnIds: [turn.id] },
+  }, turn.id).length === 0);
+
+  // 스테이지에 없는 키
+  ok('스테이지에 없는 키를 잡음', findOutputProblems(sess, stage, {
+    ...base, judgements: { 없는키: {
+      action: 'confirm', agreementSummary: '요약', reason: '이유',
+      evidenceTurnIds: [turn.id], contextAnchorTurnId: null,
+    } },
+  }, turn.id).some((p) => p.includes('합의 키가 아닙니다')));
+
+  // 10번 — 재요청 프롬프트에 오류 내용이 실려야 한다
+  const built = buildJudgePrompt({
+    repairProblems: badEvidence, session: sess, stage, playerTurn: turn,
+    worldStateReferences: {}, nearCallLimit: false, finalCall: false,
+  }, MAX_PROMPT_TOKENS);
+  ok('재요청 프롬프트에 오류 내용이 실림', !!built && built.user.includes(badEvidence[0]));
+  ok('  고치라는 지시도 실림', !!built && built.user.includes('고쳐서 다시 답한다'));
+
+  const plain = buildJudgePrompt({
+    session: sess, stage, playerTurn: turn,
+    worldStateReferences: {}, nearCallLimit: false, finalCall: false,
+  }, MAX_PROMPT_TOKENS);
+  ok('평소 프롬프트에는 안 실림', !!plain && !plain.user.includes('직전 출력의 문제'));
+
+  // 예산은 판정 호출과 분리된다
+  ok('수정 재요청 예산이 판정과 분리',
+    MAX_REPAIR_REQUESTS_PER_SESSION === 5 && sess.repairRequestCount === 0);
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -365,6 +473,7 @@ async function main(): Promise<void> {
   await budgets();
   await callCeiling();
   await selfProposal();
+  await repairContract();
   await asyncReport();
   await idempotency();
   await privacy();

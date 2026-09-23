@@ -24,12 +24,17 @@ import {
   withSessionLock,
   type Session,
 } from '../models/session';
-import { NEAR_CALL_LIMIT_THRESHOLD, type StageDefinition } from '../data/stageSchema';
+import {
+  MAX_REPAIR_REQUESTS_PER_SESSION,
+  NEAR_CALL_LIMIT_THRESHOLD,
+  type StageDefinition,
+} from '../data/stageSchema';
 import { getStage } from './npcPersonaService';
 import { evaluateTurn, generateNarrative } from './llmService';
 import { buildReport, silentSummary } from './styleAnalyzer';
 import {
   activeWorldStateReferences,
+  findOutputProblems,
   applyDisclosureUpdates,
   applyJudgements,
   buildAgreementMemo,
@@ -160,17 +165,39 @@ async function handleTurn(
   const playerTurn = appendPlayerTurn(session.sessionId, input.messageId, text);
   const callCount = incrementLlmCallCount(session.sessionId);
 
+  const evaluateInput = {
+    stage,
+    session,
+    playerTurnId: playerTurn.id,
+    playerText: text,
+    nearCallLimit: callCount >= NEAR_CALL_LIMIT_THRESHOLD,
+    finalCall: callCount >= stage.maxLlmCallsPerSession,
+    worldStateReferences: activeWorldStateReferences(stage, session.worldStateKeys),
+  };
+
   let llm;
   try {
-    llm = await evaluateTurn({
-      stage,
-      session,
-      playerTurnId: playerTurn.id,
-      playerText: text,
-      nearCallLimit: callCount >= NEAR_CALL_LIMIT_THRESHOLD,
-      finalCall: callCount >= stage.maxLlmCallsPerSession,
-      worldStateReferences: activeWorldStateReferences(stage, session.worldStateKeys),
-    });
+    llm = await evaluateTurn(evaluateInput);
+
+    // 형식은 맞지만 내용이 어긋난 출력을 고쳐 달라고 한 번 더 묻는다 (공통규칙 §8).
+    //
+    // 조용히 버리면 화면에는 NPC가 수락하는 대사가 뜨는데 키는 채워지지 않는다.
+    // 판정만 바꾸고 수락 대사를 그대로 내보내지 않기 위해, 대사까지 함께 다시 받는다.
+    // 이 예산은 판정 호출 40회와 분리돼 있고 세션당 5회다.
+    const problems = findOutputProblems(session, stage, llm, playerTurn.id);
+    if (problems.length > 0) {
+      if (session.repairRequestCount < MAX_REPAIR_REQUESTS_PER_SESSION) {
+        session.repairRequestCount += 1;
+        console.warn(`[turn] 수정 재요청 (세션 누적 ${session.repairRequestCount}): ${problems.join(' | ')}`);
+        const repaired = await evaluateTurn(evaluateInput, problems);
+        const left = findOutputProblems(session, stage, repaired, playerTurn.id);
+        // 고쳐졌으면 새 출력을 쓴다. 아니면 첫 출력을 쓰고 applyJudgements의 검증에 맡긴다.
+        if (left.length === 0) llm = repaired;
+        else console.warn(`[turn] 수정 재요청에도 남은 문제: ${left.join(' | ')}`);
+      } else {
+        console.warn(`[turn] 수정 재요청 예산 소진 — 문제를 남긴 채 진행: ${problems.join(' | ')}`);
+      }
+    }
   } catch (err) {
     // 수정 재요청까지 실패. 합의 상태를 보존하고 발화를 정상 반영으로 기록하지 않는다.
     // 클라이언트는 같은 messageId에 새 requestId로 다시 시도한다. 사용한 호출은 되돌리지 않는다.

@@ -141,7 +141,7 @@ export class NegotiationScene3 extends Phaser.Scene {
     try {
       await this.ttsManager.speak(
         text,
-        'seo_heejung'
+        'landlord'
       );
     } catch (error) {
       console.error(

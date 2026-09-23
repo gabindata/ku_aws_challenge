@@ -6,6 +6,7 @@ import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
 import { TTSManager } from '../systems/TTSManager';
 import { BackButton } from '../ui/BackButton';
+import { startNegotiation } from '../systems/ApiClient';
 
 /** 스테이지 2 — 학과 사무실 한조교 협상 화면 */
 export class NegotiationScene2 extends Phaser.Scene {
@@ -13,6 +14,8 @@ export class NegotiationScene2 extends Phaser.Scene {
   private dialogueBox!: DialogueBox;
   private micButton!: MicButton;
   private npcId!: string;
+  private sessionId: string | null = null;
+  private sceneGeneration = 0;
 
   private timerDisplay!: TimerDisplay;
   private remainingSeconds = 600;
@@ -26,6 +29,9 @@ export class NegotiationScene2 extends Phaser.Scene {
 
   init(data: { npcId: string }): void {
     this.npcId = data.npcId;
+    this.sessionId = null;
+    this.remainingSeconds = 600;
+    this.sceneGeneration += 1;
 
     console.log('선택된 NPC:', this.npcId);
   }
@@ -52,8 +58,6 @@ export class NegotiationScene2 extends Phaser.Scene {
     // =========================
 
     new BackButton(this, () => {
-      this.timerEvent?.remove();
-
       this.scene.start(SceneKey.DepartmentOffice);
     });
 
@@ -119,19 +123,48 @@ export class NegotiationScene2 extends Phaser.Scene {
       80
     );
 
-    this.startTemporaryTimer();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      // 이전 입장의 응답이 재입장한 화면을 변경하지 못하게 한다.
+      this.sceneGeneration += 1;
+      this.sessionId = null;
+      this.timerEvent?.remove();
+      this.timerEvent = undefined;
+      this.voiceInput.stop();
+      this.ttsManager.cancel();
+    });
 
-    // =========================
-    // 실제 첫 NPC 대사
-    // =========================
+    void this.beginNegotiation();
+  }
 
-    void this.playNpcLine(
-      '무슨 일로 오셨어요?'
-    );
+  /** 서버 세션과 첫 대사를 받은 뒤에만 플레이어 입력을 연다. */
+  private async beginNegotiation(): Promise<void> {
+    const generation = this.sceneGeneration;
+    this.micButton.setDisabled(true);
+    this.dialogueBox.setSpeaker('system');
+    this.dialogueBox.showText('한조교와 대화를 준비하고 있어요.');
 
-    // TODO:
-    // 나중에 ApiClient.startNegotiation(this.npcId)
-    // 결과의 npcReply를 playNpcLine()에 전달
+    try {
+      const response = await startNegotiation(2);
+      if (generation !== this.sceneGeneration) return;
+
+      this.sessionId = response.sessionId;
+      this.remainingSeconds = response.remainingSeconds ?? 600;
+      this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+      await this.playNpcLine(response.npcReply);
+      if (generation !== this.sceneGeneration) return;
+
+      // 첫 대사 재생 뒤 시작하는 임시 표시. 서버 시간 동기화는 후속 작업이다.
+      this.startTemporaryTimer();
+    } catch (error) {
+      if (generation !== this.sceneGeneration) return;
+      console.error('협상 시작 오류:', error);
+      this.sessionId = null;
+      this.micButton.setDisabled(true);
+      this.dialogueBox.setSpeaker('system');
+      this.dialogueBox.showText(
+        '대화를 시작하지 못했어요. 서버 연결을 확인한 뒤 뒤로가기로 나갔다가 다시 시작해 주세요.'
+      );
+    }
   }
 
   /**
@@ -145,6 +178,7 @@ export class NegotiationScene2 extends Phaser.Scene {
   private async playNpcLine(
     text: string
   ): Promise<void> {
+    const generation = this.sceneGeneration;
     this.dialogueBox.setSpeaker('npc');
     this.dialogueBox.showText(text);
 
@@ -161,8 +195,10 @@ export class NegotiationScene2 extends Phaser.Scene {
         error
       );
     } finally {
-      this.micButton.setRecording(false);
-      this.micButton.setDisabled(false);
+      if (generation === this.sceneGeneration) {
+        this.micButton.setRecording(false);
+        this.micButton.setDisabled(this.sessionId === null);
+      }
     }
   }
 
@@ -170,6 +206,8 @@ export class NegotiationScene2 extends Phaser.Scene {
    * 마이크 버튼 클릭 시 STT 시작
    */
   private startVoiceInput(): void {
+    if (!this.sessionId) return;
+    const generation = this.sceneGeneration;
     this.dialogueBox.setSpeaker('player');
     this.dialogueBox.showThinking();
 
@@ -178,6 +216,7 @@ export class NegotiationScene2 extends Phaser.Scene {
 
     this.voiceInput.start(
       (text) => {
+        if (generation !== this.sceneGeneration) return;
         console.log(
           '플레이어 발화:',
           text
@@ -223,6 +262,7 @@ export class NegotiationScene2 extends Phaser.Scene {
       },
 
       (error) => {
+        if (generation !== this.sceneGeneration) return;
         console.error(
           'STT 오류:',
           error

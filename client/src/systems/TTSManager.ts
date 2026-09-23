@@ -24,9 +24,9 @@ type VoiceId =
  * 서희정 → 여성 F1
  */
 const NPC_VOICES: Record<string, VoiceId> = {
-  manager_yang: 'M1',
-  assistant_han: 'M2',
-  seo_heejung: 'F1',
+  store_owner_yang: 'M1',
+  ta_han: 'M2',
+  landlord: 'F1',
 };
 
 
@@ -498,7 +498,7 @@ export class TTSManager {
 
     switch (npcId) {
 
-      case 'manager_yang':
+      case 'store_owner_yang':
 
         utterance.rate =
           0.9;
@@ -509,7 +509,7 @@ export class TTSManager {
         break;
 
 
-      case 'assistant_han':
+      case 'ta_han':
 
         utterance.rate =
           0.95;
@@ -520,7 +520,7 @@ export class TTSManager {
         break;
 
 
-      case 'seo_heejung':
+      case 'landlord':
 
         utterance.rate =
           1.0;

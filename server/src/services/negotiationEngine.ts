@@ -467,10 +467,15 @@ export function buildRewards(stage: StageDefinition): NegotiationRewards {
  * 프롬프트에 넣을 월드 상태 참조. 선언된 키 중 현재 충족된 것만.
  * NPC 대사에만 쓰고 판정에는 닿지 않는다.
  */
-export function activeWorldStateReferences(stage: StageDefinition, worldStateKeys: string[]): Record<string, string> {
+export function activeWorldStateReferences(
+  stage: StageDefinition,
+  worldStateKeys: string[],
+  /** NPC가 이미 언급한 키. 세션당 한 번이므로 두 번째부터는 싣지 않는다 */
+  mentionedKeys: string[] = [],
+): Record<string, string> {
   const active: Record<string, string> = {};
   for (const [key, text] of Object.entries(stage.worldStateReferences ?? {})) {
-    if (worldStateKeys.includes(key)) active[key] = text;
+    if (worldStateKeys.includes(key) && !mentionedKeys.includes(key)) active[key] = text;
   }
   return active;
 }

@@ -182,6 +182,8 @@ export interface LlmTurnOutput {
   /** 영향을 받은 키만 담는다. 생략된 키는 서버가 keep으로 처리한다. */
   judgements: Record<string, AgreementJudgement>;
   stageVerdict: StageVerdict;
+  /** 이번 npcReply에서 실제로 언급한 월드 상태 참조 키. 세션당 한 번만 허용된다 */
+  worldStateMentioned?: string[];
   fatalBehavior: FatalBehaviorSignal;
   /** stageVerdict가 continue일 때만 사용한다. */
   nextGoalKey?: string | null;
@@ -262,6 +264,11 @@ export interface NegotiationView {
   /** timerStatus가 'disabled'면 null */
   remainingSeconds: number | null;
   timerStatus: TimerStatus;
+  /**
+   * 남은 시간 경고를 띄울 시점(초). 클라이언트가 remainingSeconds로 직접 비교한다.
+   * 서버가 보내므로 클라이언트에 숫자를 박아 넣지 않는다. 타이머가 없으면 빈 배열.
+   */
+  timerWarningSeconds: number[];
   agreementMemo: AgreementMemoItem[];
   expressionKey: string;
   /**

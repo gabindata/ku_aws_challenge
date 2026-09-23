@@ -13,7 +13,10 @@ import {
   appendNpcTurn,
   appendPlayerTurn,
   getSession,
+  markWorldStateMentioned,
   rememberProposal,
+  remainingSeconds as remainingSecondsOf,
+  sessionStatus,
   SESSION_RETENTION_MS,
 } from '../models/session';
 import { getStage, loadAllStages } from '../services/npcPersonaService';
@@ -29,6 +32,7 @@ import {
   MAX_REPORT_CALLS_PER_SESSION,
   MAX_PROMPT_TOKENS,
   MAX_OUTPUT_TOKENS,
+  TIMER_WARNING_SECONDS,
 } from '../data/stageSchema';
 import { buildJudgePrompt, buildJudgeSystem } from '../llm/judgePrompt';
 import { judgeConfig } from '../llm/config';
@@ -45,6 +49,15 @@ function ok(name: string, cond: boolean, detail = ''): void {
 let seq = 0;
 const id = (p: string) => `${p}${(seq += 1)}`;
 const tick = () => new Promise((r) => setTimeout(r, 20));
+
+/**
+ * 첫 대사 TTS가 끝난 것으로 친다.
+ * 실제 플레이에서는 몇 초 기다려야 입력이 열린다 (공통규칙 §3).
+ */
+function skipOpeningTts(sessionId: string): void {
+  const session = getSession(sessionId)!;
+  session.startedAtMs = Date.now();
+}
 
 /** 상한까지 호출을 소진시켜 다음 턴이 종료가 되게 한다 */
 function exhaustCalls(sessionId: string): void {
@@ -124,6 +137,7 @@ async function budgets(): Promise<void> {
   for (const stage of loadAllStages()) {
     const s = await startNegotiation({ stageId: stage.stageId, requestId: id('r'), worldState: [] });
     if (!s.ok) { ok(`스테이지 ${stage.stageId} 시작`, false); continue; }
+    skipOpeningTts(s.value.sessionId);
     const sess = getSession(s.value.sessionId)!;
     for (let i = 0; i < 8; i += 1) {
       await processTurn({
@@ -154,6 +168,7 @@ async function callCeiling(): Promise<void> {
   // 공통규칙 §8 — 41번째 판정은 호출하지 않는다
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('상한 시나리오 시작', false);
+  skipOpeningTts(s.value.sessionId);
   const sess = getSession(s.value.sessionId)!;
   exhaustCalls(sess.sessionId);
 
@@ -168,6 +183,7 @@ async function asyncReport(): Promise<void> {
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('리포트 시나리오 시작', false);
   const sid = s.value.sessionId;
+  skipOpeningTts(sid);
 
   ok('시작 응답에 sessionId·stageId', s.value.sessionId === sid && s.value.stageId === 1);
 
@@ -221,6 +237,7 @@ async function selfProposal(): Promise<void> {
   const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('자발 제안 시나리오 시작', false);
   const sid = s.value.sessionId;
+  skipOpeningTts(sid);
   const sess = getSession(sid)!;
 
   // 1. 플레이어가 스스로 제안한다 (아직 성립은 아니다)
@@ -326,6 +343,7 @@ async function repairContract(): Promise<void> {
   const stage = getStage(3)!;
   const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('수정 재요청 시나리오 시작', false);
+  skipOpeningTts(s.value.sessionId);
   const sess = getSession(s.value.sessionId)!;
   const npc = appendNpcTurn(sess.sessionId, '토요일까지 치울 건가?');
   const turn = appendPlayerTurn(sess.sessionId, id('m'), '네 알겠습니다');
@@ -423,11 +441,77 @@ async function repairContract(): Promise<void> {
     MAX_REPAIR_REQUESTS_PER_SESSION === 5 && sess.repairRequestCount === 0);
 }
 
+async function readyAndTimer(): Promise<void> {
+  // 공통규칙 §3 — 첫 대사 TTS가 끝날 때까지는 ready이고 입력을 받지 않는다
+  const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('ready 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  const sess = getSession(sid)!;
+  const stage = getStage(1)!;
+
+  ok('시작 직후는 ready', sessionStatus(sess) === 'ready', sessionStatus(sess));
+  ok('  마감이 첫 대사 뒤로 잡힘', (sess.startedAtMs ?? 0) > Date.now());
+  ok('  남은 시간이 제한을 넘지 않음',
+    (remainingSecondsOf(sess) ?? 0) <= (stage.timeLimitSeconds ?? Infinity),
+    `${remainingSecondsOf(sess)} > ${stage.timeLimitSeconds}`);
+
+  const before = sess.llmCallCount;
+  const early = await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '안녕하세요' });
+  ok('TTS 중 발화는 판정 호출을 쓰지 않음', sess.llmCallCount === before, `${sess.llmCallCount}`);
+  ok('  발화로 기록하지도 않음', sess.turns.filter((t) => t.speaker === 'player').length === 0);
+  ok('  오류가 아니라 진행 중으로 답함', early.ok && early.value.outcome === 'in_progress');
+
+  skipOpeningTts(sid);
+  ok('첫 대사가 끝나면 in_progress', sessionStatus(sess) === 'in_progress');
+  const after = await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '평일 야간 가능합니다' });
+  ok('  그때부터 발화가 들어감', after.ok && sess.llmCallCount === before + 1);
+
+  // 21번 — 경고 시점을 서버가 보낸다. 클라이언트가 숫자를 박아 넣지 않는다
+  ok('경고 시점이 응답에 실림',
+    after.ok && after.value.timerWarningSeconds.join() === TIMER_WARNING_SECONDS.join(),
+    after.ok ? after.value.timerWarningSeconds.join() : 'fail');
+  ok('  시작 응답에도 실림', s.value.timerWarningSeconds.length === 2);
+}
+
+async function worldStateOnce(): Promise<void> {
+  // 각 스테이지 §월드 상태 참조 — 세션당 최대 한 번
+  const stage = getStage(3)!;
+  const keys = Object.keys(stage.worldStateReferences ?? {});
+  ok('스테이지 3에 월드 상태 참조 있음', keys.length === 2);
+
+  const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: keys });
+  if (!s.ok) return ok('월드 상태 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  const sess = getSession(sid)!;
+
+  ok('처음엔 둘 다 프롬프트 대상',
+    Object.keys(activeWorldStateReferences(stage, sess.worldStateKeys, sess.mentionedWorldStateKeys)).length === 2);
+
+  markWorldStateMentioned(sid, [keys[0]]);
+  const left = activeWorldStateReferences(stage, sess.worldStateKeys, sess.mentionedWorldStateKeys);
+  ok('언급한 키는 빠짐', !(keys[0] in left));
+  ok('  안 언급한 키는 남음', keys[1] in left);
+
+  markWorldStateMentioned(sid, [keys[0]]);
+  ok('같은 키를 또 기록해도 중복되지 않음', sess.mentionedWorldStateKeys.length === 1);
+
+  markWorldStateMentioned(sid, ['선언되지_않은_키']);
+  ok('선언 안 된 키도 목록엔 들어가지만 참조에 영향 없음',
+    Object.keys(activeWorldStateReferences(stage, sess.worldStateKeys, sess.mentionedWorldStateKeys)).length === 1);
+
+  // 월드 상태가 없으면 아예 대상이 아니다
+  const none = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
+  ok('월드 상태가 없으면 참조 없음',
+    none.ok && Object.keys(activeWorldStateReferences(stage, getSession(none.value.sessionId)!.worldStateKeys, [])).length === 0);
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('멱등성 시나리오 시작', false);
   const sid = s.value.sessionId;
+  skipOpeningTts(sid);
   const sess = getSession(sid)!;
 
   const mid = id('m');
@@ -453,6 +537,7 @@ async function privacy(): Promise<void> {
   const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: ['part_time_job_secured'] });
   if (!s.ok) return ok('비공개 시나리오 시작', false);
   const sid = s.value.sessionId;
+  skipOpeningTts(sid);
   const t = await processTurn({
     sessionId: sid, requestId: id('r'), messageId: id('m'),
     playerText: '제가 토요일까지 배달 용기랑 쓰레기 다 내놓겠습니다',
@@ -474,6 +559,8 @@ async function main(): Promise<void> {
   await callCeiling();
   await selfProposal();
   await repairContract();
+  await readyAndTimer();
+  await worldStateOnce();
   await asyncReport();
   await idempotency();
   await privacy();

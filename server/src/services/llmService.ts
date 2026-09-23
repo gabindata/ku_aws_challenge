@@ -145,6 +145,7 @@ function toTurnOutput(raw: JudgeOutput, playerTurnId: string): LlmTurnOutput {
     judgements,
     disclosureUpdates,
     stageVerdict: raw.stageVerdict,
+    worldStateMentioned: raw.worldStateMentioned,
     fatalBehavior: raw.fatalBehavior,
     nextGoalKey: raw.nextGoalKey,
     expressionKey: raw.expressionKey,

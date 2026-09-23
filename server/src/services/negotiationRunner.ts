@@ -9,9 +9,13 @@ import {
   appendNpcTurn,
   appendPlayerTurn,
   createSession,
+  beginInput,
   extendDeadline,
   getSession,
   incrementLlmCallCount,
+  isWarmingUp,
+  markWorldStateMentioned,
+  sessionStatus,
   finishReport,
   markEnded,
   playerTurns,
@@ -27,6 +31,7 @@ import {
 import {
   MAX_REPAIR_REQUESTS_PER_SESSION,
   NEAR_CALL_LIMIT_THRESHOLD,
+  TIMER_WARNING_SECONDS,
   type StageDefinition,
 } from '../data/stageSchema';
 import { getStage } from './npcPersonaService';
@@ -143,6 +148,13 @@ async function handleTurn(
   // 이미 정상 반영된 발화는 새 requestId로 와도 다시 처리하지 않는다.
   if (message?.applied) return ok(message.applied);
 
+  // 첫 대사 TTS가 아직 흐르는 중이면 입력을 받지 않는다 (공통규칙 §3).
+  // 판정 호출도 쓰지 않고 발화로 기록하지도 않으므로, 끝난 뒤 다시 보내면 된다.
+  if (isWarmingUp(session)) {
+    return ok(progressView(session, stage, 'in_progress', null, '', stage.defaultExpressionKey));
+  }
+  beginInput(session.sessionId);
+
   // 빈 STT는 합의 상태도 판정 호출도 건드리지 않는다.
   if (text === '') return ok(progressView(session, stage, 'in_progress', null, '', stage.defaultExpressionKey));
 
@@ -172,7 +184,9 @@ async function handleTurn(
     playerText: text,
     nearCallLimit: callCount >= NEAR_CALL_LIMIT_THRESHOLD,
     finalCall: callCount >= stage.maxLlmCallsPerSession,
-    worldStateReferences: activeWorldStateReferences(stage, session.worldStateKeys),
+    worldStateReferences: activeWorldStateReferences(
+      stage, session.worldStateKeys, session.mentionedWorldStateKeys,
+    ),
   };
 
   let llm;
@@ -207,6 +221,14 @@ async function handleTurn(
     const after = await recheckAfterProcessing(session, stage);
     return ok(after ?? progressView(session, stage, 'retry', 'system', '', stage.defaultExpressionKey));
   }
+
+  // 언급한 월드 상태는 기록해 다음 턴부터 프롬프트에서 뺀다 (세션당 한 번).
+  // 선언되지 않았거나 충족되지 않은 키는 무시한다.
+  const mentionable = activeWorldStateReferences(stage, session.worldStateKeys);
+  markWorldStateMentioned(
+    session.sessionId,
+    (llm.worldStateMentioned ?? []).filter((k) => k in mentionable),
+  );
 
   const fatal = isFatalConfirmed(session, llm);
   const expression = resolveExpressionKey(stage, llm.expressionKey);
@@ -331,6 +353,7 @@ async function finish(
     npcReply,
     remainingSeconds: remainingSeconds(session),
     timerStatus: session.timerStatus,
+    timerWarningSeconds: session.timerStatus === 'disabled' ? [] : [...TIMER_WARNING_SECONDS],
     agreementMemo: buildAgreementMemo(session, stage),
     expressionKey: endExpressionKey(stage, outcome),
     hintText: endReason === 'time' ? timeoutHint(session, stage) : null,
@@ -399,6 +422,7 @@ function progressView(
     npcReply,
     remainingSeconds: remainingSeconds(session),
     timerStatus: session.timerStatus,
+    timerWarningSeconds: session.timerStatus === 'disabled' ? [] : [...TIMER_WARNING_SECONDS],
     agreementMemo: buildAgreementMemo(session, stage),
     expressionKey: resolveExpressionKey(stage, expressionKey),
     hintText: null,
@@ -422,7 +446,7 @@ export function getResult(sessionId: string): RunResult<ResultResponse> {
   return ok<ResultResponse>({
     sessionId: session.sessionId,
     stageId: session.stageId,
-    sessionStatus: session.status,
+    sessionStatus: sessionStatus(session),
     remainingSeconds: remainingSeconds(session),
     view: session.status === 'ended' ? session.endView : null,
   });

@@ -231,7 +231,12 @@ function userText(input: JudgeUserInput, exchangeLimit: number): string {
     `## 현재 합의 상태\n${agreements}`,
     proposals ? `\n## 이미 나온 자발 제안 (최근 대화 밖이어도 유효하다)\n${proposals}` : '',
     facts ? `\n## 지금까지 한 안내\n${facts}` : '',
-    world ? `\n## 이 플레이어에 대해 아는 것 (대사에만 쓰고 판정에 쓰지 않는다. 세션당 한 번만 언급)\n${world}` : '',
+    world
+      ? '\n## 이 플레이어에 대해 아는 것 (대사에만 쓰고 판정에 쓰지 않는다)\n' +
+        '플레이어가 이 화제를 먼저 꺼냈을 때만 한 번 반응한다. 먼저 아는 듯 말하지 않는다.\n' +
+        '반응했다면 그 키를 worldStateMentioned에 넣는다. 이후 턴에는 이 목록에서 빠진다.\n' +
+        world
+      : '',
     exchangeLimit > 0 ? `\n## 최근 대화\n${exchangesText(session, playerTurn.id, exchangeLimit)}` : '',
     `\n## 이번 플레이어 발화\n[${playerTurn.id}] ${playerTurn.text}`,
     flags ? `\n## 이번 턴 지시\n${flags}` : '',

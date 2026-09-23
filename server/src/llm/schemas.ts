@@ -53,6 +53,8 @@ export const judgeOutputSchema = z.object({
     type: z.enum(['threat', 'abuse', 'fraud', 'harm_pressure']).nullable(),
     evidenceTurnIds: z.array(z.string()),
   }),
+  worldStateMentioned: z.array(z.string())
+    .describe('이번 npcReply에서 실제로 언급한 월드 상태 참조 키. 언급하지 않았으면 빈 배열'),
   nextGoalKey: z.string().nullable(),
   expressionKey: z.string(),
   styleSignals: styleSignalsSchema,

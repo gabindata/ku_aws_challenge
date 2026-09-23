@@ -1,6 +1,7 @@
 
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
+import { preloadNpcExpressions } from '../systems/NpcExpressionController';
 
 /** NPC 초상화·배경·효과음 로드. */
 export class PreloadScene extends Phaser.Scene {
@@ -9,6 +10,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
+    preloadNpcExpressions(this);
     // TODO: this.load.image('npc_merchant_kim', 'assets/images/npc-portraits/merchant_kim.png') 등
 
     // =========================
@@ -118,10 +120,6 @@ export class PreloadScene extends Phaser.Scene {
       'assets/images/stage1/convenience-store-interior.png'
     );
 
-    this.load.image(
-      'manager-yang',
-      'assets/images/stage1/manager-yang.png'
-    );
 
     // =========================
     // 스테이지 2 리소스
@@ -138,10 +136,6 @@ export class PreloadScene extends Phaser.Scene {
       'assets/images/stage2/stage2-bg.png'
     );
 
-    this.load.image(
-      'assistant-han',
-      'assets/images/stage2/assistant-han.png'
-    );
 
     // 학교 복도
     this.load.image(
@@ -164,10 +158,6 @@ export class PreloadScene extends Phaser.Scene {
       'assets/images/stage3/stage3-bg.png'
     );
 
-    this.load.image(
-      'seo-heejung',
-      'assets/images/stage3/seo-heejung.png'
-    );
 
     // =========================
     // UI 리소스

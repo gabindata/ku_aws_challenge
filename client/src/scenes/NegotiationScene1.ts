@@ -8,6 +8,8 @@ import { TTSManager } from '../systems/TTSManager';
 import { BackButton } from '../ui/BackButton';
 import { startNegotiation, sendTurn, newMessageId, newRequestId } from '../systems/ApiClient';
 import type { TurnRequest, TurnResponse } from '../types';
+import { AgreementMemoPanel } from '../ui/AgreementMemoPanel';
+import { NpcExpressionController, npcExpressionTexture } from '../systems/NpcExpressionController';
 
 /** 스테이지 1 — 편의점 양점장 협상 화면 */
 export class NegotiationScene1 extends Phaser.Scene {
@@ -21,6 +23,8 @@ export class NegotiationScene1 extends Phaser.Scene {
   private turnBusy = false;
   private ended = false;
   private retryButton!: Phaser.GameObjects.Text;
+  private agreementPanel!: AgreementMemoPanel;
+  private expressionController!: NpcExpressionController;
   private latestResponse: TurnResponse | null = null;
 
   private timerDisplay!: TimerDisplay;
@@ -78,11 +82,13 @@ export class NegotiationScene1 extends Phaser.Scene {
     const managerYang = this.add.image(
       width * 0.72,
       height * 0.58,
-      'manager-yang'
+      npcExpressionTexture('store_owner_yang')
     );
 
     managerYang.setScale(0.6);
     managerYang.setDepth(10);
+    this.expressionController = new NpcExpressionController(this, managerYang, 'store_owner_yang');
+    this.agreementPanel = new AgreementMemoPanel(this, 45, 190);
 
     // =========================
     // 대화창
@@ -167,6 +173,7 @@ export class NegotiationScene1 extends Phaser.Scene {
       if (generation !== this.sceneGeneration) return;
 
       this.sessionId = response.sessionId;
+      this.applyPresentation(response);
       this.remainingSeconds = response.remainingSeconds ?? 600;
       this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
       await this.playNpcLine(response.npcReply);
@@ -331,6 +338,11 @@ export class NegotiationScene1 extends Phaser.Scene {
     await this.submitPendingTurn();
   }
 
+  private applyPresentation(response: TurnResponse): void {
+    this.agreementPanel.update(response.agreementMemo);
+    void this.expressionController.setExpression(response.expressionKey);
+  }
+
   /** 통신 실패는 같은 ID, 명시적인 retry 응답은 새 requestId로 재전송한다. */
   private async submitPendingTurn(): Promise<void> {
     if (!this.pendingTurn || this.turnBusy || this.ended) return;
@@ -346,6 +358,7 @@ export class NegotiationScene1 extends Phaser.Scene {
       const response = await sendTurn(request);
       if (generation !== this.sceneGeneration) return;
       this.latestResponse = response;
+      this.applyPresentation(response);
       if (response.remainingSeconds !== null) {
         this.remainingSeconds = response.remainingSeconds;
         this.timerDisplay.setRemainingSeconds(this.remainingSeconds);

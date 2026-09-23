@@ -450,15 +450,9 @@ export class StageSelectScene extends Phaser.Scene {
           );
           break;
 
-        // 기존 스테이지 3 진입 경로 유지
+        // 집 입구 → 고금자 협상
         case 'landlord':
-          this.scene.start(
-            SceneKey.SchoolHallway,
-            {
-              npcId: this.nearbyNpcId,
-              spawnAt: 'entrance',
-            }
-          );
+          this.scene.start(SceneKey.Negotiation3, { npcId: this.nearbyNpcId });
           break;
       }
     }

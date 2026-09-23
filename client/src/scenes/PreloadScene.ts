@@ -11,6 +11,11 @@ export class PreloadScene extends Phaser.Scene {
 
   preload(): void {
     preloadNpcExpressions(this);
+    for (const key of ['stage-info-panel', 'common-panel', 'mic-button', 'settings-button', 'dialogue-nameplate', 'dialogue-box']) {
+      this.load.image(key, `assets/images/ui/${key}.png`);
+    }
+    this.load.image('landlord-2d', 'assets/images/npc-portraits/landlord/landlord_2d.png');
+    this.load.image('house-interior', 'assets/images/home/house-interior.png');
     // TODO: this.load.image('npc_merchant_kim', 'assets/images/npc-portraits/merchant_kim.png') 등
 
     // =========================

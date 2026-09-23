@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 /** 자막 박스 — NPC 대사와 플레이어 STT 결과를 표시. */
 export class DialogueBox extends Phaser.GameObjects.Container {
-  private box: Phaser.GameObjects.Rectangle;
+  private box: Phaser.GameObjects.Image;
   private speakerText: Phaser.GameObjects.Text;
   private dialogueText: Phaser.GameObjects.Text;
 
@@ -22,21 +22,13 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     this.npcName = npcName;
 
     // 대화창 배경
-    this.box = scene.add.rectangle(
-      0,
-      0,
-      width,
-      150,
-      0x000000,
-      0.75
-    );
-
-    this.box.setStrokeStyle(3, 0xffffff);
+    this.box = scene.add.image(0, 0, 'dialogue-box').setDisplaySize(width, 170);
+    const nameplate = scene.add.image(-width / 2 + 140, -100, 'dialogue-nameplate').setDisplaySize(250, 80);
 
     // 화자 이름
     this.speakerText = scene.add.text(
-      -width / 2 + 40,
-      -65,
+      -width / 2 + 45,
+      -117,
       this.npcName,
       {
         fontSize: '28px',
@@ -61,6 +53,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
 
     this.add([
       this.box,
+      nameplate,
       this.speakerText,
       this.dialogueText,
     ]);

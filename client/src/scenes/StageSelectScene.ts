@@ -118,6 +118,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
 // =========================
 
 const INTERACTION_AREAS: InteractionArea[] = [
+  { name: 'landlord', x: 1308, y: 387, width: 100, height: 90, npcId: 'landlord' },
   {
     name: 'convenience-store',
     x: 337,
@@ -137,17 +138,18 @@ const INTERACTION_AREAS: InteractionArea[] = [
   },
 
   {
-    name: 'hallway-302',
+    name: 'house',
     x: 1373,
     y: 340,
     width: 100,
     height: 100,
-    npcId: 'landlord',
+    npcId: 'house',
   },
 ];
 
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
+  private returnPosition?: { x: number; y: number };
 
   private timeOfDay!: TimeOfDaySystem;
 
@@ -188,10 +190,12 @@ export class StageSelectScene extends Phaser.Scene {
   // 다른 씬에서 전달받은 시작 위치
   init(
     data: {
+      returnPosition?: { x: number; y: number };
       spawnAt?: 'default' | 'school' | 'store';
     } = {}
   ): void {
     this.spawnAt = data.spawnAt ?? 'default';
+    this.returnPosition = data.returnPosition;
   }
 
   create(): void {
@@ -314,6 +318,19 @@ export class StageSelectScene extends Phaser.Scene {
         0.32
       );
 
+    if (this.returnPosition) {
+      this.player.setPosition(width * this.returnPosition.x, height * this.returnPosition.y);
+    }
+    // 집 왼쪽 화단 바로 앞. 원본 맵 좌표 기준으로 배치한다.
+    const sx = width / SOURCE_MAP_WIDTH;
+    const sy = height / SOURCE_MAP_HEIGHT;
+    this.add.image(1308 * sx, 344 * sy, 'landlord-2d')
+      .setDisplaySize(82 * sx, 82 * sy).setDepth(2);
+    const landlordFeet = this.add.rectangle(1308 * sx, 372 * sy, 24 * sx, 16 * sy, 0, 0);
+    this.physics.add.existing(landlordFeet, true);
+    this.physics.add.collider(this.player, landlordFeet);
+    this.player.setDepth(3);
+
     // =========================
     // F키 등록
     // =========================
@@ -411,8 +428,8 @@ export class StageSelectScene extends Phaser.Scene {
 
         this.enterText
           .setPosition(
-            area.x * scaleX,
-            (area.y - 65) * scaleY
+            (area.x + (area.npcId === 'landlord' ? 32 : 0)) * scaleX,
+            (area.y - (area.npcId === 'landlord' ? 60 : 65)) * scaleY
           )
           .setVisible(true);
 
@@ -450,9 +467,18 @@ export class StageSelectScene extends Phaser.Scene {
           );
           break;
 
-        // 집 입구 → 고금자 협상
+        case 'house':
+          this.scene.start(SceneKey.House, { returnTo: {
+            scene: SceneKey.StageSelect,
+            position: { x: this.player.x / this.scale.width, y: this.player.y / this.scale.height },
+          } });
+          break;
+        // 집주인 옆 F → 고금자 협상
         case 'landlord':
-          this.scene.start(SceneKey.Negotiation3, { npcId: this.nearbyNpcId });
+          this.scene.start(SceneKey.Negotiation3, { npcId: 'landlord', returnTo: {
+            scene: SceneKey.StageSelect,
+            position: { x: this.player.x / this.scale.width, y: this.player.y / this.scale.height },
+          } });
           break;
       }
     }
@@ -638,7 +664,7 @@ export class StageSelectScene extends Phaser.Scene {
 
   private createClock(): void {
     const clockBackground = this.add
-      .image(0, 0, 'button-default')
+      .image(0, 0, 'common-panel')
       .setDisplaySize(220, 90)
       .setAlpha(0.8);
 

@@ -1,0 +1,166 @@
+.result-report {
+  position:fixed;
+  inset:0;
+  z-index:20000;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  background:#edeae2;
+  color:#292c30;
+  font-family:YPairing,sans-serif;
+  line-height:1.7}
+.result-report * {
+  box-sizing:border-box}
+.result-report .report-page {
+  width:min(860px,calc(100% - 32px));
+  margin:auto;
+  padding:40px 0 64px}
+.result-report .eyebrow {
+  font:700 12px/1.5 sans-serif;
+  letter-spacing:.2em;
+  margin:0 0 20px;
+  color:#666963}
+.result-report .card {
+  background:#fffdf7;
+  border:2px solid #34383b;
+  padding:44px 48px;
+  margin:0 0 24px;
+  box-shadow:5px 5px 0 #d5d2c9}
+.result-report h1 {
+  font-size:64px;
+  line-height:1.2;
+  margin:0 0 20px}
+.result-report h2 {
+  font-size:25px;
+  text-align:center;
+  margin:0 0 28px}
+.result-report h3 {
+  margin:0 0 12px;
+  font-size:23px}
+.result-report p {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.result-report .hero {
+  text-align:center;
+  padding-bottom:20px}
+.result-report .result-text {
+  font-size:22px}
+.result-report .mascot {
+  width:min(300px,80%);
+  height:210px;
+  object-fit:contain;
+  margin-top:18px}
+.result-report .observation {
+  text-align:center}
+.result-report .observation h2 {
+  font-size:16px;
+  color:#676962;
+  margin-bottom:14px}
+.result-report .observation h3 {
+  font-size:30px}
+.result-report .quotes {
+  min-height:220px}
+.result-report figure {
+  margin:28px 0;
+  padding-left:20px;
+  border-left:3px solid #b1b2a7}
+.result-report blockquote {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  margin:0 0 10px;
+  font-size:21px}
+.result-report figcaption {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  color:#62665e;
+  font-size:16px}
+.result-report .axis {
+  margin:32px 0;
+  text-align:center}
+.result-report .scale {
+  display:grid;
+  grid-template-columns:80px 1fr 80px;
+  align-items:center;
+  gap:16px}
+.result-report .track {
+  position:relative;
+  height:2px;
+  background:#454b4d}
+.result-report .dot {
+  position:absolute;
+  width:14px;
+  height:14px;
+  top:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:#292f32}
+.result-report .muted .scale {
+  opacity:.38}
+.result-report .axis-note {
+  font-size:14px;
+  color:#70736d;
+  margin:12px 0 0}
+.result-report .summary {
+  font-size:20px}
+.result-report .sample-note,.result-report .connection {
+  text-align:center;
+  font-size:17px}
+.result-report .connection:empty {
+  display:none}
+.result-report .loading {
+  text-align:center;
+  min-height:240px}
+.result-report .actions {
+  display:flex;
+  justify-content:center;
+  gap:16px;
+  padding-top:16px}
+.result-report button {
+  cursor:pointer;
+  border:2px solid #303637;
+  background:#fffdf7;
+  color:#292c30;
+  padding:12px 34px;
+  font:700 20px YPairing,sans-serif;
+  box-shadow:3px 3px 0 #b9bcb1}
+.result-report button:hover {
+  background:#e1e5d8}
+.result-report button:focus-visible {
+  outline:3px solid #697654;
+  outline-offset:5px}
+@media(max-width:600px) {
+  .result-report .report-page {
+  padding-top:24px}
+.result-report .card {
+  padding:28px 20px}
+.result-report h1 {
+  font-size:48px}
+.result-report .scale {
+  grid-template-columns:58px 1fr 58px;
+  gap:10px;
+  font-size:13px}
+.result-report .observation h3 {
+  font-size:25px}
+.result-report button {
+  padding:12px 24px}
+}
+
+
+/* 게임 내 공통 창과 같은 이미지 테두리. 내용이 길어져도 모서리는 유지한다. */
+.result-report { background: #192633; color: #f1f5f7; }
+.result-report .card {
+  background: #304252;
+  border: 18px solid transparent;
+  border-image: url('/assets/images/ui/common-panel.png') 40 fill / 18px / 0 stretch;
+  box-shadow: none;
+}
+.result-report .eyebrow, .result-report .observation h2,
+.result-report figcaption, .result-report .axis-note { color: #c5d3df; }
+.result-report .track, .result-report .dot { background: #eef6ff; }
+.result-report button {
+  border: 0; box-shadow: none; color: white;
+  background: transparent url('/assets/images/ui/button-default.png') center / 100% 100% no-repeat;
+  min-width: 160px; min-height: 60px;
+}
+.result-report button:hover, .result-report button:focus-visible {
+  background: transparent url('/assets/images/ui/button-highlight.png') center / 100% 100% no-repeat;
+}

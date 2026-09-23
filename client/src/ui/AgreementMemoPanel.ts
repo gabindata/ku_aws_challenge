@@ -11,7 +11,7 @@ export class AgreementMemoPanel {
   private pageLabel: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, x: number, y: number, width = 530) {
-    scene.add.rectangle(x, y, width, 300, 0x111827, 0.88).setOrigin(0).setDepth(30);
+    scene.add.image(x, y, 'common-panel').setDisplaySize(width, 300).setOrigin(0).setDepth(30);
     scene.add.text(x + 20, y + 16, '합의 메모', { fontFamily: 'YPairing', fontSize: '26px', color: '#ffffff' }).setDepth(31);
     this.text = scene.add.text(x + 20, y + 65, '', { fontFamily: 'YPairing', fontSize: '24px', color: '#ffffff', wordWrap: { width: width - 40 } }).setDepth(31);
     this.previous = scene.add.text(x + 20, y + 257, '◀', { fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });

@@ -103,5 +103,13 @@
       "empty_pledge"
     ]
   },
-  "successState": "part_time_job_secured"
+  "successState": "part_time_job_secured",
+  "successRewards": {
+    "completeQuests": [
+      "일주일 안에 아르바이트를 구하자"
+    ],
+    "addQuests": [
+      "집주인에게 지급 일정 전달하기"
+    ]
+  }
 }

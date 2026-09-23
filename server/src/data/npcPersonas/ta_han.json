@@ -120,5 +120,11 @@
       "repeated_plea"
     ]
   },
-  "successState": "return_application_opportunity_secured"
+  "successState": "return_application_opportunity_secured",
+  "successRewards": {
+    "completeQuests": [
+      "예외 신청 접수 경로 확보"
+    ],
+    "addQuests": []
+  }
 }

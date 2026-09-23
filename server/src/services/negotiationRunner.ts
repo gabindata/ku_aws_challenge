@@ -146,6 +146,15 @@ async function handleTurn(
     return ok(await finish(session, stage, 'failure', 'time', ''));
   }
 
+  // 2. 호출 상한 — 공통규칙 §8 「41번째 판정은 호출하지 않는다」.
+  //
+  // 상한 검사가 종료 판정에만 있으면 40번째 출력이 오류일 때 새어나간다.
+  // retry를 받은 클라이언트가 새 requestId로 다시 보내면 41번째가 실제로 불린다.
+  // 그래서 호출하기 전에 여기서 막는다.
+  if (session.llmCallCount >= stage.maxLlmCallsPerSession) {
+    return ok(await finish(session, stage, 'failure', 'limit', ''));
+  }
+
   session.messages.set(input.messageId, { text, applied: null });
   const playerTurn = appendPlayerTurn(session.sessionId, input.messageId, text);
   const callCount = incrementLlmCallCount(session.sessionId);

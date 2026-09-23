@@ -151,10 +151,6 @@ function toTurnOutput(raw: JudgeOutput, playerTurnId: string): LlmTurnOutput {
 // 종료 리포트 생성 (기획 「결과 리포트 기획」 §2·§3·§5)
 // ─────────────────────────────────────────────
 
-/** 시도당 응답 시간 제한 */
-export const REPORT_TIMEOUT_MS = 15_000;
-export const REPORT_MAX_OUTPUT_TOKENS = 2_000;
-
 export interface NarrativeInput {
   stage: StageDefinition;
   session: Session;
@@ -192,10 +188,11 @@ export async function generateNarrative(input: NarrativeInput): Promise<StyleNar
     session.reportCallCount += 1;
     const attempt = session.reportCallCount;
     try {
-      const attemptWork: Promise<StyleNarrative> = useStub()
-        ? Promise.resolve(stubNarrative(report, input.playerTurns))
-        : callReportModel(input, report);
-      const raw = await withTimeout(attemptWork, REPORT_TIMEOUT_MS);
+      // 응답 시간 제한은 reportConfig().timeoutMs 하나뿐이다.
+      // 여기서 한 번 더 감싸면 짧은 쪽이 이겨 그 설정이 조용히 무효가 된다.
+      const raw: StyleNarrative = useStub()
+        ? stubNarrative(report, input.playerTurns)
+        : await callReportModel(input, report);
       // 근거 발화 ID가 이 세션의 리포트 대상 플레이어 발화인지 확인하고
       // 저장된 원문으로 교체한 뒤 시간순으로 배치한다.
       const verified = verifyNarrative(raw, input.playerTurns, report);
@@ -224,17 +221,6 @@ async function callReportModel(input: NarrativeInput, report: ReportInput): Prom
     highlights: raw.highlights.map((h) => ({ turnId: h.turnId, quote: '', note: h.note })),
     summary: raw.summary,
   };
-}
-
-/** 타임아웃도 형식 검증 실패와 같은 재시도·실패 규칙을 따른다. */
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    work,
-    new Promise<T>((_, reject) => {
-      const timer = setTimeout(() => reject(new Error(`리포트 생성 ${ms}ms 초과`)), ms);
-      timer.unref?.();
-    }),
-  ]);
 }
 
 /**

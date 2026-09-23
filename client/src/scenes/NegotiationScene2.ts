@@ -6,7 +6,10 @@ import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
 import { TTSManager } from '../systems/TTSManager';
 import { BackButton } from '../ui/BackButton';
-import { startNegotiation } from '../systems/ApiClient';
+import { startNegotiation, sendTurn, newMessageId, newRequestId } from '../systems/ApiClient';
+import type { TurnRequest, TurnResponse } from '../types';
+import { AgreementMemoPanel } from '../ui/AgreementMemoPanel';
+import { NpcExpressionController, npcExpressionTexture } from '../systems/NpcExpressionController';
 
 /** 스테이지 2 — 학과 사무실 한조교 협상 화면 */
 export class NegotiationScene2 extends Phaser.Scene {
@@ -16,6 +19,13 @@ export class NegotiationScene2 extends Phaser.Scene {
   private npcId!: string;
   private sessionId: string | null = null;
   private sceneGeneration = 0;
+  private pendingTurn: TurnRequest | null = null;
+  private turnBusy = false;
+  private ended = false;
+  private retryButton!: Phaser.GameObjects.Text;
+  private agreementPanel!: AgreementMemoPanel;
+  private expressionController!: NpcExpressionController;
+  private latestResponse: TurnResponse | null = null;
 
   private timerDisplay!: TimerDisplay;
   private remainingSeconds = 600;
@@ -30,6 +40,10 @@ export class NegotiationScene2 extends Phaser.Scene {
   init(data: { npcId: string }): void {
     this.npcId = data.npcId;
     this.sessionId = null;
+    this.pendingTurn = null;
+    this.turnBusy = false;
+    this.ended = false;
+    this.latestResponse = null;
     this.remainingSeconds = 600;
     this.sceneGeneration += 1;
 
@@ -68,11 +82,13 @@ export class NegotiationScene2 extends Phaser.Scene {
     const assistantHan = this.add.image(
       width * 0.72,
       height * 0.58,
-      'assistant-han'
+      npcExpressionTexture('ta_han')
     );
 
     assistantHan.setScale(0.6);
     assistantHan.setDepth(10);
+    this.expressionController = new NpcExpressionController(this, assistantHan, 'ta_han');
+    this.agreementPanel = new AgreementMemoPanel(this, 45, 190);
 
     // =========================
     // 대화창
@@ -94,7 +110,7 @@ export class NegotiationScene2 extends Phaser.Scene {
 
     // =========================
     // TTS 관리자
-    // BootScene에서 만든 인스턴스 재사용
+    // BootScene에서 만들어 둔 인스턴스 재사용
     // =========================
 
     this.ttsManager =
@@ -112,6 +128,15 @@ export class NegotiationScene2 extends Phaser.Scene {
         this.startVoiceInput();
       }
     );
+
+    this.retryButton = this.add.text(width / 2, height - 160, '같은 발화 다시 전송', {
+      fontSize: '24px', color: '#ffffff', backgroundColor: '#333333',
+      padding: { x: 16, y: 8 },
+    }).setOrigin(0.5).setDepth(40).setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this.retryButton.on('pointerdown', () => {
+      void this.submitPendingTurn();
+    });
 
     // =========================
     // 타이머
@@ -141,13 +166,14 @@ export class NegotiationScene2 extends Phaser.Scene {
     const generation = this.sceneGeneration;
     this.micButton.setDisabled(true);
     this.dialogueBox.setSpeaker('system');
-    this.dialogueBox.showText('한조교와 대화를 준비하고 있어요.');
+    this.dialogueBox.showText('한조교과 대화를 준비하고 있어요.');
 
     try {
       const response = await startNegotiation(2);
       if (generation !== this.sceneGeneration) return;
 
       this.sessionId = response.sessionId;
+      this.applyPresentation(response);
       this.remainingSeconds = response.remainingSeconds ?? 600;
       this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
       await this.playNpcLine(response.npcReply);
@@ -168,12 +194,12 @@ export class NegotiationScene2 extends Phaser.Scene {
   }
 
   /**
-   * NPC 대사 공통 처리
+   * NPC 대사를
    *
-   * 1. DialogueBox에 표시
-   * 2. 입력 잠금
-   * 3. TTS 재생
-   * 4. 재생 종료 후 입력 복구
+   * 1. 대화창에 표시
+   * 2. TTS로 재생
+   *
+   * 하는 공통 함수.
    */
   private async playNpcLine(
     text: string
@@ -182,6 +208,7 @@ export class NegotiationScene2 extends Phaser.Scene {
     this.dialogueBox.setSpeaker('npc');
     this.dialogueBox.showText(text);
 
+    // NPC가 말하는 동안 플레이어 입력 잠금
     this.micButton.setDisabled(true);
 
     try {
@@ -191,13 +218,13 @@ export class NegotiationScene2 extends Phaser.Scene {
       );
     } catch (error) {
       console.error(
-        '한조교 TTS 재생 오류:',
+        'NPC TTS 재생 오류:',
         error
       );
     } finally {
       if (generation === this.sceneGeneration) {
         this.micButton.setRecording(false);
-        this.micButton.setDisabled(this.sessionId === null);
+        this.micButton.setDisabled(this.sessionId === null || this.ended || this.turnBusy || this.pendingTurn !== null || this.remainingSeconds <= 0);
       }
     }
   }
@@ -206,7 +233,7 @@ export class NegotiationScene2 extends Phaser.Scene {
    * 마이크 버튼 클릭 시 STT 시작
    */
   private startVoiceInput(): void {
-    if (!this.sessionId) return;
+    if (!this.sessionId || this.ended || this.turnBusy || this.pendingTurn || this.remainingSeconds <= 0) return;
     const generation = this.sceneGeneration;
     this.dialogueBox.setSpeaker('player');
     this.dialogueBox.showThinking();
@@ -223,7 +250,7 @@ export class NegotiationScene2 extends Phaser.Scene {
         );
 
         // =========================
-        // STT 결과 없음
+        // STT 결과가 비어 있음
         // =========================
 
         if (!text.trim()) {
@@ -249,7 +276,7 @@ export class NegotiationScene2 extends Phaser.Scene {
 
         this.micButton.setRecording(false);
 
-        // NPC 응답이 끝날 때까지 잠금
+        // NPC 응답이 끝날 때까지 입력 잠금
         this.micButton.setDisabled(true);
 
         // =========================
@@ -294,73 +321,99 @@ export class NegotiationScene2 extends Phaser.Scene {
    * ↓
    * DialogueBox
    * ↓
-   * 한조교 TTS
+   * Supertonic TTS
    */
   private async handlePlayerUtterance(
     playerText: string
   ): Promise<void> {
+    if (!this.sessionId || this.ended || this.turnBusy || this.pendingTurn) return;
+    if (!playerText.trim()) return;
+
+    this.pendingTurn = {
+      sessionId: this.sessionId,
+      playerText,
+      messageId: newMessageId(),
+      requestId: newRequestId(),
+    };
+    await this.submitPendingTurn();
+  }
+
+  private applyPresentation(response: TurnResponse): void {
+    this.agreementPanel.update(response.agreementMemo);
+    void this.expressionController.setExpression(response.expressionKey);
+  }
+
+  /** 통신 실패는 같은 ID, 명시적인 retry 응답은 새 requestId로 재전송한다. */
+  private async submitPendingTurn(): Promise<void> {
+    if (!this.pendingTurn || this.turnBusy || this.ended) return;
+    const generation = this.sceneGeneration;
+    const request = this.pendingTurn;
+    this.turnBusy = true;
+    this.retryButton.setVisible(false);
+    this.micButton.setDisabled(true);
+    this.dialogueBox.setSpeaker('npc');
+    this.dialogueBox.showThinking();
+
     try {
-      this.dialogueBox.setSpeaker('npc');
-      this.dialogueBox.showThinking();
+      const response = await sendTurn(request);
+      if (generation !== this.sceneGeneration) return;
+      this.latestResponse = response;
+      this.applyPresentation(response);
+      if (response.remainingSeconds !== null) {
+        this.remainingSeconds = response.remainingSeconds;
+        this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+      }
 
-      console.log(
-        '백엔드로 보낼 플레이어 발화:',
-        playerText
-      );
+      if (response.outcome === 'retry') {
+        this.pendingTurn = { ...request, requestId: newRequestId() };
+        this.dialogueBox.setSpeaker('system');
+        this.dialogueBox.showText('발화를 처리하지 못했어요. 아래 버튼으로 같은 발화를 다시 전송해 주세요.');
+        this.retryButton.setVisible(true);
+        return;
+      }
 
-      // =========================
-      // TODO: 백엔드 연결
-      // =========================
-      //
-      // const response =
-      //   await ApiClient.sendTurn(
-      //     this.sessionId,
-      //     playerText
-      //   );
-      //
-      // await this.playNpcLine(
-      //   response.npcReply
-      // );
-      //
-      // if (
-      //   response.outcome === 'success' ||
-      //   response.outcome === 'failure'
-      // ) {
-      //   this.scene.start(SceneKey.Result);
-      //   return;
-      // }
+      this.pendingTurn = null;
+      this.ended = response.outcome === 'success' || response.outcome === 'failure';
+      if (this.ended) this.timerEvent?.remove();
+      if (response.npcReply.trim()) await this.playNpcLine(response.npcReply);
+      if (generation !== this.sceneGeneration) return;
 
-      /**
-       * 현재는 백엔드 미연결 상태.
-       */
-      this.dialogueBox.setSpeaker('system');
-
-      this.dialogueBox.showText(
-        'NPC 응답 서버 연결 전입니다.'
-      );
-
-      this.micButton.setDisabled(false);
-
+      if (this.ended) {
+        // 결과/리포트 화면 연결 전까지 서버의 종료 문구를 현재 대화창에 표시한다.
+        this.dialogueBox.setSpeaker('system');
+        const heading = response.outcome === 'success' ? '성공!' : '실패!';
+        this.dialogueBox.showText([
+          heading,
+          response.outcome === 'success' ? response.successText : response.failureText,
+          response.endReason === 'time' ? '제한 시간이 끝났습니다.' : null,
+          response.endReason === 'limit' ? response.limitText : null,
+          response.hintText,
+        ].filter(Boolean).join('\n'));
+      } else {
+        // 로컬 표시가 0초여서 멈췄더라도 서버가 진행 중이면 다시 표시한다.
+        this.timerEvent?.remove();
+        this.startTemporaryTimer();
+      }
     } catch (error) {
-      console.error(
-        '턴 처리 오류:',
-        error
-      );
-
+      if (generation !== this.sceneGeneration) return;
+      // 처리 여부를 모르므로 pendingTurn의 내용과 두 ID를 그대로 보존한다.
+      console.error('턴 처리 오류:', error);
       this.dialogueBox.setSpeaker('system');
-
-      this.dialogueBox.showText(
-        '응답을 불러오지 못했어요. 다시 시도해 주세요.'
-      );
-
-      this.micButton.setRecording(false);
-      this.micButton.setDisabled(false);
-      this.micButton.setRetry();
+      this.dialogueBox.showText('응답을 받지 못했어요. 연결을 확인하고 아래 버튼으로 같은 발화를 다시 전송해 주세요.');
+      this.retryButton.setVisible(true);
+    } finally {
+      if (generation === this.sceneGeneration) {
+        this.turnBusy = false;
+        this.micButton.setRecording(false);
+        this.micButton.setDisabled(this.ended || this.pendingTurn !== null || this.remainingSeconds <= 0);
+      }
     }
   }
 
   /**
    * 임시 클라이언트 타이머
+   *
+   * 나중에는 서버 remainingSeconds 기준으로 교체.
    */
   private startTemporaryTimer(): void {
     this.timerDisplay.setRemainingSeconds(

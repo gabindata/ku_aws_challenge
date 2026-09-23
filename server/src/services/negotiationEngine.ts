@@ -8,6 +8,8 @@ import type {
 import type { StyleSignals } from '../../../shared/types/styleReportTypes';
 import {
   findPlayerTurn,
+  forgetProposal,
+  rememberProposal,
   isNpcTurnBefore,
   npcTurnBefore,
   setAgreement,
@@ -94,6 +96,12 @@ export function applyJudgements(
     // 맥락 동의 앵커가 키의 contextAnchorScope에 맞는 실제 NPC 메시지인지 확인한다.
     // 동의 대상이 분명한지, 안내가 변경·철회됐는지의 의미 판단은 LLM이 맡는다.
     if (judgement.contextAnchorTurnId != null) {
+      // 맥락 동의를 허용하지 않는 키다. NPC 제안에 기댄 성립을 받지 않는다 (공통규칙 §5).
+      // 불린 검사이므로 서버가 의미를 판단하는 것이 아니다.
+      if (!definition.contextConsentAllowed) {
+        result.evidenceMismatchKeys.push(key);
+        continue;
+      }
       const scope = definition.contextAnchorScope ?? 'immediate';
       const anchorOk = scope === 'session'
         ? isNpcTurnBefore(session.sessionId, judgement.contextAnchorTurnId, playerTurnId)
@@ -104,8 +112,25 @@ export function applyJudgements(
       }
     }
 
-    // 불린 값만 본다. 의미 판단이 아니므로 서버의 의미 판단 금지 원칙과 충돌하지 않는다.
-    if (action === 'confirm' && definition.playerMustPropose && judgement.selfProposed !== true) {
+    // 자발 제안 근거를 모은다. 이번 발화에서 나왔을 수도, 앞선 발화에서 나왔을 수도 있다.
+    // 실재하는 플레이어 발화인지만 본다. 제안이 충분한지는 판단하지 않는다.
+    const claimed = (judgement.selfProposalTurnIds ?? []).filter(
+      (id) => findPlayerTurn(session.sessionId, id) !== undefined,
+    );
+    const remembered = session.pendingProposals[key]?.turnIds ?? [];
+    const proposalTurnIds = claimed.length > 0 ? claimed : remembered;
+
+    // 이번 턴에 제안이 나왔으면 키별로 따로 보관한다.
+    // 최근 6왕복 밖으로 밀려도 프롬프트에 남아, 몇 턴 뒤의 수락을 판정할 수 있다.
+    if (claimed.length > 0) rememberProposal(session.sessionId, key, claimed);
+
+    // playerMustPropose 키는 NPC 제안을 수락하는 것만으로 성립하지 않는다 (공통규칙 §5).
+    //
+    // 다만 앞선 턴에서 이미 스스로 제안했다면, 뒤이은 재확인을 수락하는 것은
+    // 정당하다. 그래서 이번 발화의 selfProposed뿐 아니라 보관된 제안 근거도 본다.
+    // 둘 다 없을 때만 강등한다.
+    const proposedSelf = judgement.selfProposed === true || proposalTurnIds.length > 0;
+    if (action === 'confirm' && definition.playerMustPropose && !proposedSelf) {
       action = 'clarify';
       result.selfProposalMissingKeys.push(key);
     }
@@ -121,7 +146,12 @@ export function applyJudgements(
 
     if (action === 'revoke') {
       if (current?.status === 'unmet') continue;
-      setAgreement(session.sessionId, key, { status: 'unmet', summary: null, evidenceTurnIds: [], lastAction: 'revoke', updatedAtMs: now });
+      // 철회하면 그 키의 자발 제안 근거도 함께 버린다. 다시 제안해야 한다.
+      forgetProposal(session.sessionId, key);
+      setAgreement(session.sessionId, key, {
+        status: 'unmet', summary: null, evidenceTurnIds: [],
+        selfProposalTurnIds: [], lastAction: 'revoke', updatedAtMs: now,
+      });
       result.revokedKeys.push(key);
       continue;
     }
@@ -129,7 +159,8 @@ export function applyJudgements(
     const wasMet = current?.status === 'met';
     const summary = judgement.agreementSummary ?? null;
     setAgreement(session.sessionId, key, {
-      status: 'met', summary, evidenceTurnIds: judgement.evidenceTurnIds, lastAction: 'confirm', updatedAtMs: now,
+      status: 'met', summary, evidenceTurnIds: judgement.evidenceTurnIds,
+      selfProposalTurnIds: proposalTurnIds, lastAction: 'confirm', updatedAtMs: now,
     });
     if (!wasMet) result.newlyMetKeys.push(key);
     else if (current?.summary !== summary) result.updatedKeys.push(key);
@@ -137,6 +168,95 @@ export function applyJudgements(
 
   logRejections(result);
   return result;
+}
+
+/**
+ * 판정 출력에서 서버가 잡을 수 있는 문제를 모은다 (공통규칙 §6·§8).
+ *
+ * 상태를 바꾸지 않는다. 고쳐 달라고 다시 물을지 정하는 데만 쓴다.
+ * 여기서 찾는 것은 전부 ID 실재 여부와 불린 정합성이고, 의미 판단은 하지 않는다.
+ *
+ * 조용히 버리면 두 가지가 나빠진다. 화면에는 NPC가 수락하는 대사가 뜨는데
+ * 키는 채워지지 않아 플레이어가 무엇이 잘못됐는지 알 수 없고,
+ * 같은 출력 오류가 반복돼도 프롬프트가 나아지지 않는다.
+ */
+export function findOutputProblems(
+  session: Session,
+  stage: StageDefinition,
+  llm: LlmTurnOutput,
+  playerTurnId: string,
+): string[] {
+  const problems: string[] = [];
+
+  for (const [key, judgement] of Object.entries(llm.judgements)) {
+    const definition = stage.agreementDefinitions[key];
+    if (!definition || !stage.requiredAgreementKeys.includes(key)) {
+      problems.push(`judgements의 "${key}"는 이 스테이지의 합의 키가 아닙니다. 기준표에 있는 키만 씁니다.`);
+      continue;
+    }
+    if (judgement.action === 'keep') continue;
+
+    if (!hasValidEvidence(session, judgement.evidenceTurnIds)) {
+      problems.push(
+        `"${key}"의 evidenceTurnIds가 이 세션의 플레이어 발화 ID가 아닙니다 ` +
+        `(받은 값: ${JSON.stringify(judgement.evidenceTurnIds ?? [])}). 대화에 실제로 있는 ID를 넣습니다.`,
+      );
+    }
+
+    if (judgement.contextAnchorTurnId != null) {
+      if (!definition.contextConsentAllowed) {
+        problems.push(
+          `"${key}"는 맥락 동의를 허용하지 않는 키입니다. contextAnchorTurnId를 넣지 말고, ` +
+          '플레이어가 직접 말한 내용만으로 판단합니다.',
+        );
+      } else {
+        const scope = definition.contextAnchorScope ?? 'immediate';
+        const anchorOk = scope === 'session'
+          ? isNpcTurnBefore(session.sessionId, judgement.contextAnchorTurnId, playerTurnId)
+          : npcTurnBefore(session.sessionId, playerTurnId)?.id === judgement.contextAnchorTurnId;
+        if (!anchorOk) {
+          problems.push(
+            `"${key}"의 contextAnchorTurnId(${judgement.contextAnchorTurnId})가 ` +
+            `${scope === 'session' ? '이 세션의 앞선 NPC 메시지' : '직전 NPC 메시지'}가 아닙니다.`,
+          );
+        }
+      }
+    }
+
+    // 강등만 하고 넘어가면 화면에는 수락 대사가 뜬다. 대사까지 같이 고쳐야 한다.
+    if (judgement.action === 'confirm' && definition.playerMustPropose) {
+      const claimed = (judgement.selfProposalTurnIds ?? []).filter(
+        (id) => findPlayerTurn(session.sessionId, id) !== undefined,
+      );
+      const remembered = session.pendingProposals[key]?.turnIds ?? [];
+      if (judgement.selfProposed !== true && claimed.length === 0 && remembered.length === 0) {
+        problems.push(
+          `"${key}"는 플레이어가 스스로 제안해야 성립하는 키인데 자발 제안 근거가 없습니다. ` +
+          'confirm이 아니라 clarify로 판정하고, npcReply도 수락이 아니라 한 번 더 묻는 대사로 씁니다.',
+        );
+      }
+    }
+  }
+
+  // 치명적 행동은 근거와 유형이 함께 와야 한다 (공통규칙 §6).
+  if (llm.stageVerdict === 'fatal' || llm.fatalBehavior.detected) {
+    const { detected, type, evidenceTurnIds } = llm.fatalBehavior;
+    if (!detected) {
+      problems.push('stageVerdict가 fatal인데 fatalBehavior.detected가 false입니다. 둘을 맞춥니다.');
+    } else if (type === null || !FATAL_TYPES.has(type)) {
+      problems.push(
+        `fatalBehavior.type이 비었거나 허용 값이 아닙니다 (받은 값: ${JSON.stringify(type)}). ` +
+        `${[...FATAL_TYPES].join(' / ')} 중 하나를 넣습니다.`,
+      );
+    } else if (!hasValidEvidence(session, evidenceTurnIds)) {
+      problems.push(
+        'fatalBehavior.evidenceTurnIds가 이 세션의 플레이어 발화 ID가 아닙니다. ' +
+        '치명적 행동이 실제로 나온 발화 ID를 넣습니다.',
+      );
+    }
+  }
+
+  return problems;
 }
 
 function hasValidEvidence(session: Session, ids: string[] | undefined): boolean {
@@ -347,10 +467,15 @@ export function buildRewards(stage: StageDefinition): NegotiationRewards {
  * 프롬프트에 넣을 월드 상태 참조. 선언된 키 중 현재 충족된 것만.
  * NPC 대사에만 쓰고 판정에는 닿지 않는다.
  */
-export function activeWorldStateReferences(stage: StageDefinition, worldStateKeys: string[]): Record<string, string> {
+export function activeWorldStateReferences(
+  stage: StageDefinition,
+  worldStateKeys: string[],
+  /** NPC가 이미 언급한 키. 세션당 한 번이므로 두 번째부터는 싣지 않는다 */
+  mentionedKeys: string[] = [],
+): Record<string, string> {
   const active: Record<string, string> = {};
   for (const [key, text] of Object.entries(stage.worldStateReferences ?? {})) {
-    if (worldStateKeys.includes(key)) active[key] = text;
+    if (worldStateKeys.includes(key) && !mentionedKeys.includes(key)) active[key] = text;
   }
   return active;
 }

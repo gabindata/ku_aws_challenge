@@ -37,6 +37,19 @@ export interface Turn {
  */
 export type SessionStatus = 'ready' | 'in_progress' | 'ended';
 
+/**
+ * 말투 리포트 생성 상태 (공통규칙 §9).
+ *
+ * 종료 결과와 리포트 생성은 분리한다. 종료가 확정되면 결과·문구·보상을
+ * 먼저 돌려주고 리포트를 기다리지 않는다. 생성에 10초쯤 걸리기 때문에
+ * 같이 기다리면 플레이어가 성공했는지도 모른 채 빈 화면을 본다.
+ *
+ *   pending  생성 중. styleReport는 아직 null이다
+ *   ready    styleReport에 값이 있다
+ *   failed   두 번 다 실패했다. 화면은 안내 문구만 띄운다
+ */
+export type ReportStatus = 'pending' | 'ready' | 'failed';
+
 // ─────────────────────────────────────────────
 // 합의 상태 (공통규칙 §5·§6)
 // ─────────────────────────────────────────────
@@ -57,6 +70,24 @@ export type AgreementStatus = 'unmet' | 'met' | 'pending_reconfirm';
  */
 export type AgreementAction = 'confirm' | 'revoke' | 'clarify' | 'keep';
 
+/**
+ * 플레이어가 스스로 내놓은 제안 (공통규칙 §5·§8).
+ *
+ * playerMustPropose 키는 NPC 제안을 수락하는 것만으로는 성립하지 않는다.
+ * 그런데 제안과 최종 수락 사이에 대화가 몇 턴 끼면 제안이 최근 6왕복 밖으로
+ * 밀려 프롬프트에서 사라진다. 그러면 나중에 "네, 그렇게 할게요"라고 해도
+ * 판정 모델이 근거를 못 찾고, 서버는 자발 제안이 없다고 보아 강등한다.
+ *
+ * 그래서 제안이 나온 순간 키별로 따로 보관하고, 6왕복 밖이어도 프롬프트에 싣는다.
+ */
+export interface PendingProposal {
+  /** 제안이 나온 플레이어 발화 ID */
+  turnIds: string[];
+  /** 그 발화의 원문. 축약된 기록에서도 살아남아야 한다 */
+  texts: string[];
+  updatedAtMs: number;
+}
+
 export interface AgreementState {
   status: AgreementStatus;
   /**
@@ -65,6 +96,8 @@ export interface AgreementState {
    */
   summary: string | null;
   evidenceTurnIds: string[];
+  /** 이 키를 성립시킨 자발 제안의 근거 발화 ID. 없으면 빈 배열 */
+  selfProposalTurnIds: string[];
   lastAction: AgreementAction | null;
   updatedAtMs: number | null;
 }
@@ -93,6 +126,11 @@ export interface AgreementJudgement {
    * false면 서버가 confirm을 clarify로 강등한다.
    */
   selfProposed?: boolean | null;
+  /**
+   * 자발 제안이 나온 플레이어 발화 ID. 이번 발화일 수도, 앞선 발화일 수도 있다.
+   * 서버는 실재하는 플레이어 발화인지만 검증하고 의미는 판단하지 않는다.
+   */
+  selfProposalTurnIds?: string[] | null;
 }
 
 /**
@@ -144,6 +182,8 @@ export interface LlmTurnOutput {
   /** 영향을 받은 키만 담는다. 생략된 키는 서버가 keep으로 처리한다. */
   judgements: Record<string, AgreementJudgement>;
   stageVerdict: StageVerdict;
+  /** 이번 npcReply에서 실제로 언급한 월드 상태 참조 키. 세션당 한 번만 허용된다 */
+  worldStateMentioned?: string[];
   fatalBehavior: FatalBehaviorSignal;
   /** stageVerdict가 continue일 때만 사용한다. */
   nextGoalKey?: string | null;
@@ -215,12 +255,20 @@ export interface NegotiationRewards {
  * 잔여 LLM 호출 횟수는 담지 않는다.
  */
 export interface NegotiationView {
+  /** 늦게 도착한 이전 세션의 응답을 구분하는 근거 (공통규칙 §9) */
+  sessionId: string;
+  stageId: number;
   outcome: Outcome;
   endReason: EndReason;
   npcReply: string;
   /** timerStatus가 'disabled'면 null */
   remainingSeconds: number | null;
   timerStatus: TimerStatus;
+  /**
+   * 남은 시간 경고를 띄울 시점(초). 클라이언트가 remainingSeconds로 직접 비교한다.
+   * 서버가 보내므로 클라이언트에 숫자를 박아 넣지 않는다. 타이머가 없으면 빈 배열.
+   */
+  timerWarningSeconds: number[];
   agreementMemo: AgreementMemoItem[];
   expressionKey: string;
   /**
@@ -240,12 +288,37 @@ export interface NegotiationView {
   /** 성공 시에만. 화면에 표시하지 않고 로컬 저장소에 반영한다. */
   rewards?: NegotiationRewards | null;
   /**
+   * 합의로 다룰 수 없는 고정 조건. 성공 응답에만 실린다.
+   * 스테이지 1~3의 성공 화면에는 표시하지 않고, 튜토리얼만 「고정 안내문」으로 띄운다.
+   */
+  fixedTerms?: string[] | null;
+  /**
    * 결과 화면을 닫았을 때의 이동. 공통규칙 §9의 종료 응답 필드 목록에는 없지만
    * 튜토리얼의 "다시 하기만" 화면을 그리려면 클라이언트가 알아야 해서 싣는다.
    */
   onClose?: FailureCloseBehavior;
-  /** 성공·실패 공통 */
+  /**
+   * 리포트 생성 상태. 종료 응답에만 실린다.
+   * pending이면 styleReport가 아직 없으므로 결과 조회로 다시 가져간다.
+   */
+  reportStatus?: ReportStatus;
+  /** 성공·실패 공통. reportStatus가 ready일 때만 값이 있다 */
   styleReport?: StyleReport;
+}
+
+/**
+ * GET /api/sessions/{sessionId}/result 응답 (공통규칙 §9).
+ *
+ * 진행 중이면 상태와 남은 시간만, 종료됐으면 종료 응답을 그대로 돌려준다.
+ * 조회는 LLM 호출도 보상 지급도 세션 재시작도 일으키지 않는다.
+ */
+export interface ResultResponse {
+  sessionId: string;
+  stageId: number;
+  sessionStatus: SessionStatus;
+  remainingSeconds: number | null;
+  /** sessionStatus가 ended일 때만 */
+  view: NegotiationView | null;
 }
 
 // ─────────────────────────────────────────────
@@ -286,9 +359,7 @@ export interface StartRequest extends IdempotentRequest {
    */
   worldState?: string[];
 }
-export interface StartResponse extends NegotiationView {
-  sessionId: string;
-}
+export type StartResponse = NegotiationView;
 
 /** POST /api/negotiation/turn */
 export interface TurnRequest extends IdempotentRequest {

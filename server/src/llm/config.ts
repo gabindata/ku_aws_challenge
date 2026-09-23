@@ -10,7 +10,7 @@
  */
 
 /** 프롬프트를 고칠 때마다 올린다. 판정 로그에 남겨 회귀 테스트의 기준으로 쓴다. */
-export const PROMPT_VERSION = '2026-09-19.3';
+export const PROMPT_VERSION = '2026-09-23.4';
 
 import { MAX_OUTPUT_TOKENS, MAX_PROMPT_TOKENS } from '../data/stageSchema';
 

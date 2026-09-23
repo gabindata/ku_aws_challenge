@@ -20,6 +20,8 @@ export const judgementSchema = z.object({
     .describe('NPC 안내에 기댄 맥락 동의일 때 실제로 참조한 NPC 메시지 ID'),
   selfProposed: z.boolean().nullable()
     .describe('플레이어가 스스로 꺼냈는가. playerMustPropose 키의 confirm에서는 필수'),
+  selfProposalTurnIds: z.array(z.string())
+    .describe('자발 제안이 나온 플레이어 발화 ID. 이번 발화일 수도, 앞선 발화일 수도 있다. 없으면 빈 배열'),
 });
 
 export const styleSignalsSchema = z.object({
@@ -51,6 +53,8 @@ export const judgeOutputSchema = z.object({
     type: z.enum(['threat', 'abuse', 'fraud', 'harm_pressure']).nullable(),
     evidenceTurnIds: z.array(z.string()),
   }),
+  worldStateMentioned: z.array(z.string())
+    .describe('이번 npcReply에서 실제로 언급한 월드 상태 참조 키. 언급하지 않았으면 빈 배열'),
   nextGoalKey: z.string().nullable(),
   expressionKey: z.string(),
   styleSignals: styleSignalsSchema,

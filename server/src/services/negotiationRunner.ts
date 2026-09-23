@@ -2,15 +2,21 @@ import type {
   EndReason,
   NegotiationView,
   Outcome,
+  ResultResponse,
   StartResponse,
 } from '../../../shared/types/negotiationTypes';
 import {
   appendNpcTurn,
   appendPlayerTurn,
   createSession,
+  beginInput,
   extendDeadline,
   getSession,
   incrementLlmCallCount,
+  isWarmingUp,
+  markWorldStateMentioned,
+  sessionStatus,
+  finishReport,
   markEnded,
   playerTurns,
   recordFatalTurn,
@@ -22,12 +28,18 @@ import {
   withSessionLock,
   type Session,
 } from '../models/session';
-import { NEAR_CALL_LIMIT_THRESHOLD, type StageDefinition } from '../data/stageSchema';
+import {
+  MAX_REPAIR_REQUESTS_PER_SESSION,
+  NEAR_CALL_LIMIT_THRESHOLD,
+  TIMER_WARNING_SECONDS,
+  type StageDefinition,
+} from '../data/stageSchema';
 import { getStage } from './npcPersonaService';
 import { evaluateTurn, generateNarrative } from './llmService';
 import { buildReport, silentSummary } from './styleAnalyzer';
 import {
   activeWorldStateReferences,
+  findOutputProblems,
   applyDisclosureUpdates,
   applyJudgements,
   buildAgreementMemo,
@@ -88,10 +100,9 @@ export function startNegotiation(input: {
       scheduleExpiry(session);
     }
 
-    return ok<StartResponse>({
-      sessionId: session.sessionId,
-      ...progressView(session, stage, 'in_progress', null, openingText, stage.defaultExpressionKey),
-    });
+    return ok<StartResponse>(
+      progressView(session, stage, 'in_progress', null, openingText, stage.defaultExpressionKey),
+    );
   });
 }
 
@@ -137,6 +148,13 @@ async function handleTurn(
   // 이미 정상 반영된 발화는 새 requestId로 와도 다시 처리하지 않는다.
   if (message?.applied) return ok(message.applied);
 
+  // 첫 대사 TTS가 아직 흐르는 중이면 입력을 받지 않는다 (공통규칙 §3).
+  // 판정 호출도 쓰지 않고 발화로 기록하지도 않으므로, 끝난 뒤 다시 보내면 된다.
+  if (isWarmingUp(session)) {
+    return ok(progressView(session, stage, 'in_progress', null, '', stage.defaultExpressionKey));
+  }
+  beginInput(session.sessionId);
+
   // 빈 STT는 합의 상태도 판정 호출도 건드리지 않는다.
   if (text === '') return ok(progressView(session, stage, 'in_progress', null, '', stage.defaultExpressionKey));
 
@@ -146,21 +164,57 @@ async function handleTurn(
     return ok(await finish(session, stage, 'failure', 'time', ''));
   }
 
+  // 2. 호출 상한 — 공통규칙 §8 「41번째 판정은 호출하지 않는다」.
+  //
+  // 상한 검사가 종료 판정에만 있으면 40번째 출력이 오류일 때 새어나간다.
+  // retry를 받은 클라이언트가 새 requestId로 다시 보내면 41번째가 실제로 불린다.
+  // 그래서 호출하기 전에 여기서 막는다.
+  if (session.llmCallCount >= stage.maxLlmCallsPerSession) {
+    // 종료 이유는 §6의 우선순위로 정한다. 필수 키가 이미 다 찼다면
+    // 상한에 닿았어도 성공이다. 여기서 failure/limit으로 못 박으면 그걸 덮는다.
+    const { outcome, endReason } = resolveOutcome(session, stage, { fatal: false, nowMs: receivedAtMs });
+    return ok(await finish(session, stage, outcome, endReason, ''));
+  }
+
   session.messages.set(input.messageId, { text, applied: null });
   const playerTurn = appendPlayerTurn(session.sessionId, input.messageId, text);
   const callCount = incrementLlmCallCount(session.sessionId);
 
+  const evaluateInput = {
+    stage,
+    session,
+    playerTurnId: playerTurn.id,
+    playerText: text,
+    nearCallLimit: callCount >= NEAR_CALL_LIMIT_THRESHOLD,
+    finalCall: callCount >= stage.maxLlmCallsPerSession,
+    worldStateReferences: activeWorldStateReferences(
+      stage, session.worldStateKeys, session.mentionedWorldStateKeys,
+    ),
+  };
+
   let llm;
   try {
-    llm = await evaluateTurn({
-      stage,
-      session,
-      playerTurnId: playerTurn.id,
-      playerText: text,
-      nearCallLimit: callCount >= NEAR_CALL_LIMIT_THRESHOLD,
-      finalCall: callCount >= stage.maxLlmCallsPerSession,
-      worldStateReferences: activeWorldStateReferences(stage, session.worldStateKeys),
-    });
+    llm = await evaluateTurn(evaluateInput);
+
+    // 형식은 맞지만 내용이 어긋난 출력을 고쳐 달라고 한 번 더 묻는다 (공통규칙 §8).
+    //
+    // 조용히 버리면 화면에는 NPC가 수락하는 대사가 뜨는데 키는 채워지지 않는다.
+    // 판정만 바꾸고 수락 대사를 그대로 내보내지 않기 위해, 대사까지 함께 다시 받는다.
+    // 이 예산은 판정 호출 40회와 분리돼 있고 세션당 5회다.
+    const problems = findOutputProblems(session, stage, llm, playerTurn.id);
+    if (problems.length > 0) {
+      if (session.repairRequestCount < MAX_REPAIR_REQUESTS_PER_SESSION) {
+        session.repairRequestCount += 1;
+        console.warn(`[turn] 수정 재요청 (세션 누적 ${session.repairRequestCount}): ${problems.join(' | ')}`);
+        const repaired = await evaluateTurn(evaluateInput, problems);
+        const left = findOutputProblems(session, stage, repaired, playerTurn.id);
+        // 고쳐졌으면 새 출력을 쓴다. 아니면 첫 출력을 쓰고 applyJudgements의 검증에 맡긴다.
+        if (left.length === 0) llm = repaired;
+        else console.warn(`[turn] 수정 재요청에도 남은 문제: ${left.join(' | ')}`);
+      } else {
+        console.warn(`[turn] 수정 재요청 예산 소진 — 문제를 남긴 채 진행: ${problems.join(' | ')}`);
+      }
+    }
   } catch (err) {
     // 수정 재요청까지 실패. 합의 상태를 보존하고 발화를 정상 반영으로 기록하지 않는다.
     // 클라이언트는 같은 messageId에 새 requestId로 다시 시도한다. 사용한 호출은 되돌리지 않는다.
@@ -170,6 +224,14 @@ async function handleTurn(
     const after = await recheckAfterProcessing(session, stage);
     return ok(after ?? progressView(session, stage, 'retry', 'system', '', stage.defaultExpressionKey));
   }
+
+  // 언급한 월드 상태는 기록해 다음 턴부터 프롬프트에서 뺀다 (세션당 한 번).
+  // 선언되지 않았거나 충족되지 않은 키는 무시한다.
+  const mentionable = activeWorldStateReferences(stage, session.worldStateKeys);
+  markWorldStateMentioned(
+    session.sessionId,
+    (llm.worldStateMentioned ?? []).filter((k) => k in mentionable),
+  );
 
   const fatal = isFatalConfirmed(session, llm);
   const expression = resolveExpressionKey(stage, llm.expressionKey);
@@ -285,21 +347,16 @@ async function finish(
 
   markEnded(session.sessionId, outcome, endReason);
 
-  const turns = playerTurns(session);
-  // 유효 발화가 0개면 종료 LLM을 부르지 않고 서버가 종료 사실만 한 줄로 적는다.
-  const narrative = turns.length === 0
-    ? { title: '', titleNote: '', highlights: [], summary: silentSummary(endReason) }
-    : await generateNarrative({ stage, session, outcome, endReason, playerTurns: turns, signals: session.styleSignals });
-
-  session.styleReport = buildReport(turns, session.styleSignals, narrative);
-
   const success = outcome === 'success';
   const view: NegotiationView = {
+    sessionId: session.sessionId,
+    stageId: session.stageId,
     outcome,
     endReason,
     npcReply,
     remainingSeconds: remainingSeconds(session),
     timerStatus: session.timerStatus,
+    timerWarningSeconds: session.timerStatus === 'disabled' ? [] : [...TIMER_WARNING_SECONDS],
     agreementMemo: buildAgreementMemo(session, stage),
     expressionKey: endExpressionKey(stage, outcome),
     hintText: endReason === 'time' ? timeoutHint(session, stage) : null,
@@ -307,11 +364,50 @@ async function finish(
     failureText: outcome === 'failure' ? stage.failureText ?? null : null,
     limitText: endReason === 'limit' ? stage.limitText : null,
     rewards: success ? buildRewards(stage) : null,
+    fixedTerms: success ? stage.fixedTerms : null,
     onClose: stage.onFailureClose ?? 'world_map',
-    styleReport: session.styleReport,
+    reportStatus: 'pending',
+    styleReport: undefined,
   };
   session.endView = view;
+
+  // 리포트는 기다리지 않는다 (공통규칙 §9). 생성에 10초쯤 걸려서
+  // 같이 기다리면 플레이어가 성공했는지도 모른 채 빈 화면을 본다.
+  // 완료되면 endView를 갱신하고, 클라이언트는 결과 조회로 가져간다.
+  void startReport(session, stage, outcome, endReason);
+
   return view;
+}
+
+/**
+ * 리포트를 뒤에서 만든다.
+ *
+ * 세션당 한 번만 돈다. 결과 조회가 반복돼도 생성이 다시 시작되지 않는다.
+ * 실패해도 종료 결과는 이미 나간 뒤라 게임 진행에 영향이 없다.
+ */
+async function startReport(
+  session: Session,
+  stage: StageDefinition,
+  outcome: Outcome,
+  endReason: EndReason,
+): Promise<void> {
+  if (session.reportStarted) return;
+  session.reportStarted = true;
+
+  try {
+    const turns = playerTurns(session);
+    // 유효 발화가 0개면 종료 LLM을 부르지 않고 서버가 종료 사실만 한 줄로 적는다.
+    const narrative = turns.length === 0
+      ? { title: '', titleNote: '', highlights: [], summary: silentSummary(endReason) }
+      : await generateNarrative({ stage, session, outcome, endReason, playerTurns: turns, signals: session.styleSignals });
+
+    session.styleReport = buildReport(turns, session.styleSignals, narrative);
+    finishReport(session.sessionId, 'ready');
+  } catch (err) {
+    // generateNarrative는 보통 null을 돌려주지만, 예기치 못한 오류도 종료를 막지 않는다.
+    console.error('[report] 생성 중 오류', err);
+    finishReport(session.sessionId, 'failed');
+  }
 }
 
 function progressView(
@@ -323,13 +419,39 @@ function progressView(
   expressionKey: string,
 ): NegotiationView {
   return {
+    sessionId: session.sessionId,
+    stageId: session.stageId,
     outcome,
     endReason,
     npcReply,
     remainingSeconds: remainingSeconds(session),
     timerStatus: session.timerStatus,
+    timerWarningSeconds: session.timerStatus === 'disabled' ? [] : [...TIMER_WARNING_SECONDS],
     agreementMemo: buildAgreementMemo(session, stage),
     expressionKey: resolveExpressionKey(stage, expressionKey),
     hintText: null,
   };
+}
+
+/**
+ * 결과 조회 (공통규칙 §9).
+ *
+ * 진행 중이면 상태와 남은 시간만, 종료됐으면 종료 응답을 그대로 돌려준다.
+ * 읽기 전용이다. LLM을 부르지도, 보상을 주지도, 세션을 되살리지도 않는다.
+ *
+ * 리포트가 아직 pending이면 클라이언트가 이 조회를 다시 해서 가져간다.
+ * 반복 조회로 생성이 다시 시작되지는 않는다 (reportStarted 플래그).
+ */
+export function getResult(sessionId: string): RunResult<ResultResponse> {
+  const session = getSession(sessionId);
+  // 30분 보관이 지났거나 서버를 재시작한 경우다. 정상적으로 발생한다.
+  if (!session) return fail(404, 'SESSION_NOT_FOUND');
+
+  return ok<ResultResponse>({
+    sessionId: session.sessionId,
+    stageId: session.stageId,
+    sessionStatus: sessionStatus(session),
+    remainingSeconds: remainingSeconds(session),
+    view: session.status === 'ended' ? session.endView : null,
+  });
 }

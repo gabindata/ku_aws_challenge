@@ -5,6 +5,8 @@ import type {
   EndReason,
   NegotiationView,
   Outcome,
+  PendingProposal,
+  ReportStatus,
   SessionStatus,
   TimerStatus,
   Turn,
@@ -58,6 +60,22 @@ export interface Session {
    */
   fatalTurnIds: string[];
   styleReport: StyleReport | null;
+  /**
+   * 키별로 가장 최근의 자발 제안. 최근 6왕복 밖으로 밀려도 프롬프트에 남는다.
+   * 이게 없으면 제안과 최종 수락 사이에 대화가 끼었을 때 근거가 사라진다.
+   */
+  pendingProposals: Record<string, PendingProposal>;
+  /**
+   * NPC가 이미 언급한 월드 상태 참조 키 (각 스테이지 §월드 상태 참조).
+   * "세션당 최대 한 번"을 지시문에만 맡기면 여러 번 나올 수 있어 서버가 센다.
+   */
+  mentionedWorldStateKeys: string[];
+  /** 리포트 생성 상태. 종료 전에는 null이다 */
+  reportStatus: ReportStatus | null;
+  /** 생성이 이미 시작됐는지. 결과를 반복 조회해도 다시 시작되지 않게 한다 */
+  reportStarted: boolean;
+  /** 보관 기간이 끝나면 세션을 지우는 타이머 */
+  disposeTimer: NodeJS.Timeout | null;
 
   // ── 멱등성 (공통규칙 §3) ──
   /**
@@ -111,7 +129,10 @@ export interface CreateSessionInput {
 export function createSession(input: CreateSessionInput): Session {
   const agreements: Record<string, AgreementState> = {};
   for (const key of input.requiredAgreementKeys) {
-    agreements[key] = { status: 'unmet', summary: null, evidenceTurnIds: [], lastAction: null, updatedAtMs: null };
+    agreements[key] = {
+      status: 'unmet', summary: null, evidenceTurnIds: [],
+      selfProposalTurnIds: [], lastAction: null, updatedAtMs: null,
+    };
   }
 
   const session: Session = {
@@ -133,6 +154,11 @@ export function createSession(input: CreateSessionInput): Session {
     llmCallCount: 0,
     repairRequestCount: 0,
     reportCallCount: 0,
+    pendingProposals: {},
+    mentionedWorldStateKeys: [],
+    reportStatus: null,
+    reportStarted: false,
+    disposeTimer: null,
     styleSignals: [],
     fatalTurnIds: [],
     styleReport: null,
@@ -227,6 +253,32 @@ export function setAgreement(sessionId: string, key: string, state: AgreementSta
   requireSession(sessionId).agreements[key] = state;
 }
 
+/**
+ * 자발 제안을 키별로 기록한다. 같은 키에 새 제안이 오면 최신으로 바꾼다.
+ * 판단은 하지 않는다. 어느 발화였는지와 그 원문만 들고 있는다.
+ */
+export function rememberProposal(sessionId: string, key: string, turnIds: string[]): void {
+  const session = requireSession(sessionId);
+  const texts = turnIds
+    .map((id) => session.turns.find((t) => t.id === id)?.text)
+    .filter((t): t is string => t !== undefined);
+  if (texts.length === 0) return;
+  session.pendingProposals[key] = { turnIds, texts, updatedAtMs: Date.now() };
+}
+
+/** 합의가 철회되면 그 키의 제안 근거도 함께 버린다. */
+export function forgetProposal(sessionId: string, key: string): void {
+  delete requireSession(sessionId).pendingProposals[key];
+}
+
+/** NPC가 월드 상태를 언급했음을 기록한다. 이후 프롬프트에서 뺀다. */
+export function markWorldStateMentioned(sessionId: string, keys: string[]): void {
+  const session = requireSession(sessionId);
+  for (const key of keys) {
+    if (!session.mentionedWorldStateKeys.includes(key)) session.mentionedWorldStateKeys.push(key);
+  }
+}
+
 export function setDisclosedFact(sessionId: string, key: string, fact: DisclosedFact): void {
   requireSession(sessionId).disclosedFacts[key] = fact;
 }
@@ -249,13 +301,47 @@ export function incrementLlmCallCount(sessionId: string): number {
 // ── 타이머 ──
 
 /** 첫 대사의 추정 TTS가 끝나는 시각부터 제한 시간을 센다. */
+/**
+ * 마감을 예약한다 (공통규칙 §3).
+ *
+ * startedAtMs는 지금이 아니라 첫 대사 TTS가 끝나는 시각이다. 그 전까지 세션은
+ * ready이고 입력을 받지 않는다. 안 막으면 NPC가 아직 말하는 중에 보낸 발화가
+ * 판정 호출을 쓰고, 남은 시간이 제한 시간보다 크게 나간다.
+ */
 export function startTimer(sessionId: string, startedAtMs: number, timeLimitSeconds: number): void {
   const session = requireSession(sessionId);
-  session.status = 'in_progress';
-  if (session.timerStatus === 'disabled') return;
+  if (session.timerStatus === 'disabled') {
+    // 시간 제한이 없는 튜토리얼은 기다릴 마감이 없다.
+    session.status = 'in_progress';
+    return;
+  }
   session.startedAtMs = startedAtMs;
   session.deadlineAtMs = startedAtMs + timeLimitSeconds * 1000;
   session.timerStatus = 'running';
+}
+
+/** 첫 대사 TTS가 아직 흐르는 중인가. 이때는 입력을 받지 않는다. */
+export function isWarmingUp(session: Session): boolean {
+  if (session.status !== 'ready') return false;
+  if (session.startedAtMs === null) return false;
+  return Date.now() < session.startedAtMs;
+}
+
+/**
+ * 지금 보고할 세션 상태.
+ *
+ * 첫 발화가 오기를 기다리지 않고 시각으로 정한다. 그러지 않으면 첫 대사가
+ * 끝난 뒤에도 아무도 말하지 않는 동안 ready로 보고된다.
+ */
+export function sessionStatus(session: Session): SessionStatus {
+  if (session.status === 'ended') return 'ended';
+  return isWarmingUp(session) ? 'ready' : 'in_progress';
+}
+
+/** 첫 대사가 끝나 입력을 받기 시작한다. */
+export function beginInput(sessionId: string): void {
+  const session = requireSession(sessionId);
+  if (session.status === 'ready') session.status = 'in_progress';
 }
 
 /**
@@ -272,7 +358,45 @@ export function extendDeadline(sessionId: string, pausedMs: number): void {
 
 export function remainingSeconds(session: Session): number | null {
   if (session.deadlineAtMs === null) return null;
-  return Math.max(0, Math.ceil((session.deadlineAtMs - Date.now()) / 1000));
+  // 아직 시작 전이면 제한 시간 그대로다. 첫 대사 TTS만큼 더 크게 나가면 안 된다.
+  const from = Math.max(Date.now(), session.startedAtMs ?? 0);
+  return Math.max(0, Math.ceil((session.deadlineAtMs - from) / 1000));
+}
+
+/**
+ * 종료 후 세션을 얼마나 들고 있을지 (공통규칙 §3·§11).
+ *
+ * 결과 화면을 보는 동안, 그리고 새로고침 뒤 다시 조회할 동안은 남아 있어야 한다.
+ * 조회한다고 기간이 늘어나지는 않는다.
+ */
+export const SESSION_RETENTION_MS = 30 * 60 * 1000;
+
+/**
+ * 리포트 생성이 끝났음을 기록하고, 이때부터 보관 기간을 센다.
+ *
+ * 기준을 종료 시각이 아니라 리포트 확정 시각으로 잡는 이유는,
+ * 생성이 오래 걸린 세션이 그만큼 일찍 지워지면 안 되기 때문이다.
+ */
+export function finishReport(sessionId: string, status: ReportStatus): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  session.reportStatus = status;
+  if (session.endView) {
+    session.endView.reportStatus = status;
+    session.endView.styleReport = session.styleReport ?? undefined;
+  }
+  scheduleDispose(session);
+}
+
+function scheduleDispose(session: Session): void {
+  if (session.disposeTimer) clearTimeout(session.disposeTimer);
+  const timer = setTimeout(() => {
+    // 대화·리포트·요청 캐시가 세션과 함께 사라진다.
+    for (const requestId of session.requests.keys()) startRequests.delete(requestId);
+    sessions.delete(session.sessionId);
+  }, SESSION_RETENTION_MS);
+  timer.unref?.();
+  session.disposeTimer = timer;
 }
 
 export function markEnded(sessionId: string, outcome: Outcome, endReason: EndReason): void {
@@ -281,6 +405,7 @@ export function markEnded(sessionId: string, outcome: Outcome, endReason: EndRea
   session.endReason = endReason;
   session.status = 'ended';
   session.timerStatus = 'paused';
+  session.reportStatus = 'pending';
   if (session.expiryTimer) clearTimeout(session.expiryTimer);
   session.expiryTimer = null;
 }

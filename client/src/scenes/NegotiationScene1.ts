@@ -5,6 +5,7 @@ import { DialogueBox } from '../ui/DialogueBox';
 import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
 import { TTSManager } from '../systems/TTSManager';
+import { BackButton } from '../ui/BackButton';
 
 /** 스테이지 1 — 편의점 양점장 협상 화면 */
 export class NegotiationScene1 extends Phaser.Scene {
@@ -44,6 +45,19 @@ export class NegotiationScene1 extends Phaser.Scene {
 
     background.setDisplaySize(width, height);
     background.setDepth(-10);
+
+    // =========================
+    // 뒤로가기 버튼
+    // 협상 화면 → 편의점 내부
+    // =========================
+
+    new BackButton(this, () => {
+      // NPC 음성 재생 및 음성 인식 정리는
+      // 각 매니저의 중지 메서드 확인 후 추가
+      this.timerEvent?.remove();
+
+      this.scene.start(SceneKey.ConvenienceStore);
+    });
 
     // =========================
     // 양점장 캐릭터
@@ -143,7 +157,7 @@ export class NegotiationScene1 extends Phaser.Scene {
     try {
       await this.ttsManager.speak(
         text,
-        'manager_yang'
+        'store_owner_yang'
       );
     } catch (error) {
       console.error(

@@ -124,7 +124,7 @@ const INTERACTION_AREAS: InteractionArea[] = [
     y: 305,
     width: 100,
     height: 100,
-    npcId: 'manager_yang',
+    npcId: 'store_owner_yang',
   },
 
   {
@@ -133,7 +133,7 @@ const INTERACTION_AREAS: InteractionArea[] = [
     y: 680,
     width: 110,
     height: 240,
-    npcId: 'assistant_han',
+    npcId: 'ta_han',
   },
 
   {
@@ -142,7 +142,7 @@ const INTERACTION_AREAS: InteractionArea[] = [
     y: 340,
     width: 100,
     height: 100,
-    npcId: 'seo_heejung',
+    npcId: 'landlord',
   },
 ];
 
@@ -296,14 +296,14 @@ export class StageSelectScene extends Phaser.Scene {
       this.spawnAt === 'school'
         ? 685
         : this.spawnAt === 'store'
-          ? 30
+          ? 337  // 편의점 문 앞 X좌표
           : SOURCE_MAP_WIDTH / 2;
-
+    
     const spawnY =
       this.spawnAt === 'school'
-        ? 540
+        ? 590
         : this.spawnAt === 'store'
-          ? 390
+          ? 300  // 편의점 문 앞 Y좌표
           : SOURCE_MAP_HEIGHT / 2;
 
       this.player = new Player(
@@ -430,7 +430,7 @@ export class StageSelectScene extends Phaser.Scene {
     ) {
       switch (this.nearbyNpcId) {
         // 편의점
-        case 'manager_yang':
+        case 'store_owner_yang':
           this.scene.start(
             SceneKey.ConvenienceStore,
             {
@@ -440,7 +440,7 @@ export class StageSelectScene extends Phaser.Scene {
           break;
 
         // 학교 건물 → 학교 복도
-        case 'assistant_han':
+        case 'ta_han':
           this.scene.start(
             SceneKey.SchoolHallway,
             {
@@ -451,7 +451,7 @@ export class StageSelectScene extends Phaser.Scene {
           break;
 
         // 기존 스테이지 3 진입 경로 유지
-        case 'seo_heejung':
+        case 'landlord':
           this.scene.start(
             SceneKey.SchoolHallway,
             {

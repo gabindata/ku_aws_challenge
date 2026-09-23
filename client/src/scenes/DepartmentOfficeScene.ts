@@ -1,7 +1,7 @@
-
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
+import { StageInfoPanel } from '../ui/StageInfoPanel';
 
 interface BlockedArea {
   name: string;
@@ -28,7 +28,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     left: 0,
     top: 0,
     width: 1920,
-    height: 175,
+    height: 140,
   },
 
   // 왼쪽 벽
@@ -59,46 +59,6 @@ const BLOCKED_AREAS: BlockedArea[] = [
   },
 
   // =========================
-  // 위쪽 가구
-  // =========================
-
-  // 왼쪽 사물함
-  {
-    name: 'filing-cabinets',
-    left: 155,
-    top: 90,
-    width: 265,
-    height: 114,
-  },
-
-  // 서류 보관장
-  {
-    name: 'document-cabinet',
-    left: 450,
-    top: 90,
-    width: 240,
-    height: 114,
-  },
-
-  // 중앙 수납장
-  {
-    name: 'upper-storage',
-    left: 1060,
-    top: 150,
-    width: 225,
-    height: 45,
-  },
-
-  // 오른쪽 위 화분
-  {
-    name: 'upper-right-plant',
-    left: 1730,
-    top: 125,
-    width: 100,
-    height: 90,
-  },
-
-  // =========================
   // 왼쪽 장비
   // =========================
 
@@ -116,7 +76,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
     name: 'printer',
     left: 70,
     top: 520,
-    width: 110,
+    width: 100,
     height: 165,
   },
 
@@ -127,10 +87,10 @@ const BLOCKED_AREAS: BlockedArea[] = [
   // 책상 본체 및 아래쪽 의자
   {
     name: 'office-desks',
-    left: 385,
-    top: 440,
-    width: 1030,
-    height: 350,
+    left: 410,
+    top: 445,
+    width: 990,
+    height: 260,
   },
 
   // =========================
@@ -140,28 +100,28 @@ const BLOCKED_AREAS: BlockedArea[] = [
   // 왼쪽 의자
   {
     name: 'top-chair-left',
-    left: 510,
-    top: 345,
-    width: 125,
-    height: 90,
+    left: 530,
+    top: 370,
+    width: 70,
+    height: 70,
   },
 
   // 가운데 의자
   {
     name: 'top-chair-center',
-    left: 845,
-    top: 345,
-    width: 125,
-    height: 90,
+    left: 860,
+    top: 370,
+    width: 70,
+    height: 70,
   },
 
   // 오른쪽 의자
   {
     name: 'top-chair-right',
-    left: 1180,
-    top: 345,
-    width: 125,
-    height: 90,
+    left: 1200,
+    top: 370,
+    width: 70,
+    height: 70,
   },
 
   // =========================
@@ -171,7 +131,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'left-partition',
     left: 720,
-    top: 400,
+    top: 410,
     width: 20,
     height: 45,
   },
@@ -179,7 +139,7 @@ const BLOCKED_AREAS: BlockedArea[] = [
   {
     name: 'right-partition',
     left: 1070,
-    top: 400,
+    top: 410,
     width: 20,
     height: 45,
   },
@@ -191,8 +151,8 @@ const BLOCKED_AREAS: BlockedArea[] = [
   // 오른쪽 아래 화분
   {
     name: 'lower-right-plant',
-    left: 1740,
-    top: 775,
+    left: 1750,
+    top: 785,
     width: 100,
     height: 195,
   },
@@ -201,7 +161,18 @@ const BLOCKED_AREAS: BlockedArea[] = [
 export class DepartmentOfficeScene extends Phaser.Scene {
   private player!: Player;
 
+  // 한조교 2D 캐릭터
+  private assistantHan!: Phaser.GameObjects.Image;
+
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
+
+  // =========================
+  // 한조교 상호작용
+  // =========================
+
+  private npcInteractZone!: Phaser.GameObjects.Zone;
+  private npcInteractText!: Phaser.GameObjects.Text;
+  private stageInfoPanel!: StageInfoPanel;
 
   // =========================
   // 오른쪽 출입문 상호작용
@@ -241,9 +212,105 @@ export class DepartmentOfficeScene extends Phaser.Scene {
       width * (1740 / SOURCE_WIDTH),
       height * (430 / SOURCE_HEIGHT),
       'down-idle',
-      0.64,
+      0.9,
       450
     );
+
+    // =========================
+    // 한조교 2D 캐릭터 생성
+    // =========================
+
+    this.assistantHan = this.add.image(
+      width * (220 / SOURCE_WIDTH),
+      height * (400 / SOURCE_HEIGHT),
+      'assistant-han-2d'
+    );
+
+    // 플레이어와 동일한 표시 크기
+    this.assistantHan.setDisplaySize(
+      256 * 0.9,
+      256 * 0.9
+    );
+
+    // 한조교의 Y좌표를 기준으로 표시 순서 설정
+    this.assistantHan.setDepth(
+      this.assistantHan.y
+    );
+
+    // =========================
+    // 한조교 물리 충돌 영역 생성
+    // =========================
+
+    // 한조교를 움직이지 않는 고정 충돌체로 등록
+    this.physics.add.existing(
+      this.assistantHan,
+      true
+    );
+
+    const hanBody =
+      this.assistantHan.body as Phaser.Physics.Arcade.StaticBody;
+
+    // 기존 충돌 영역 크기 유지
+    hanBody.setSize(
+      35,
+      1
+    );
+
+    // 기존 충돌 영역 위치 유지
+    hanBody.setOffset(
+      (this.assistantHan.width - 70) / 2,
+      this.assistantHan.height - 110
+    );
+
+    // 플레이어와 한조교 충돌
+    this.physics.add.collider(
+      this.player,
+      this.assistantHan
+    );
+
+    // =========================
+    // 한조교 상호작용 영역
+    // 양점장과 동일한 180 × 110 크기
+    // =========================
+
+    // 한조교 앞·뒤·양옆에서 상호작용할 수 있도록 감지 영역 확대
+    this.npcInteractZone = this.add.zone(
+      this.assistantHan.x,
+      this.assistantHan.y,
+      width * (280 / SOURCE_WIDTH),
+      height * (280 / SOURCE_HEIGHT)
+    );
+    // 가까이 왔는지 확인하는 감지 영역
+    this.physics.add.existing(
+      this.npcInteractZone,
+      true
+    );
+
+    // =========================
+    // 한조교 근처 [F] 안내
+    // =========================
+
+    this.npcInteractText = this.add
+      .text(
+        // 양점장과 동일하게 오른쪽 볼 옆에 표시
+        this.assistantHan.x + width * (80 / SOURCE_WIDTH),
+        this.assistantHan.y - height * (15 / SOURCE_HEIGHT),
+        '[F]',
+        {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
+          fontSize: '28px',
+          color: '#ffffff',
+          backgroundColor: '#000000aa',
+          padding: {
+            x: 10,
+            y: 5,
+          },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(10000)
+      .setVisible(false);
 
     // =========================
     // 충돌 영역 생성
@@ -268,7 +335,10 @@ export class DepartmentOfficeScene extends Phaser.Scene {
       height * (110 / SOURCE_HEIGHT)
     );
 
-    this.physics.add.existing(this.officeExit, true);
+    this.physics.add.existing(
+      this.officeExit,
+      true
+    );
 
     // 오른쪽 문 위에 F 표시
     this.exitText = this.add
@@ -291,28 +361,102 @@ export class DepartmentOfficeScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(10000)
       .setVisible(false);
+
+    // =========================
+    // 스테이지 2 정보창 생성
+    // =========================
+
+    this.stageInfoPanel = new StageInfoPanel(this, {
+      stageTitle: 'STAGE 2',
+      npcName: '한조교',
+
+      description:
+        '학과 사무실에서 한조교와 마주쳤습니다.\n' +
+        '대화를 통해 갈등을 해결해 보세요.',
+
+      onStart: () => {
+        this.scene.start(SceneKey.Negotiation2, {
+          npcId: 'ta_han',
+          stageId: 2,
+        });
+      },
+    });
   }
 
   update(): void {
+    // =========================
+    // 정보창이 열려 있으면
+    // 플레이어 이동 및 상호작용 중지
+    // =========================
+
+    if (this.stageInfoPanel.isOpen) {
+      this.player.setVelocity(0, 0);
+
+      this.npcInteractText.setVisible(false);
+      this.exitText.setVisible(false);
+
+      return;
+    }
+
     this.player.update();
 
-    // 오른쪽 문 근처인지 확인
+    // =========================
+    // 플레이어와 한조교 앞뒤 관계 설정
+    // =========================
+
+    this.player.setDepth(this.player.y);
+
+    // =========================
+    // 한조교 상호작용 영역 확인
+    // =========================
+
+    const nearNpc = this.physics.overlap(
+      this.player,
+      this.npcInteractZone
+    );
+
+    // 한조교 근처에서만 [F] 표시
+    this.npcInteractText.setVisible(nearNpc);
+
+    // =========================
+    // 오른쪽 출입문 상호작용 영역 확인
+    // =========================
+
     const nearExit = this.physics.overlap(
       this.player,
       this.officeExit
     );
 
-    // 문 근처에 있을 때만 F 표시
-    this.exitText.setVisible(nearExit);
+    // 문 근처에 있을 때만 [F] 표시
+    this.exitText.setVisible(nearExit && !nearNpc);
 
-    // 문 앞에서 F키를 누르면 학교 복도로 이동
-    if (
-      nearExit &&
-      Phaser.Input.Keyboard.JustDown(this.interactKey)
-    ) {
-        this.scene.start(SceneKey.SchoolHallway, {
-            spawnAt: 'office',
-          });
+    // F키가 눌린 순간 한 번만 확인
+    const pressedF =
+      Phaser.Input.Keyboard.JustDown(this.interactKey);
+
+    // =========================
+    // 한조교와 상호작용
+    // =========================
+
+    if (nearNpc && pressedF) {
+      this.player.setVelocity(0, 0);
+
+      this.stageInfoPanel.open();
+
+      this.npcInteractText.setVisible(false);
+      this.exitText.setVisible(false);
+
+      return;
+    }
+
+    // =========================
+    // 출입문과 상호작용
+    // =========================
+
+    if (nearExit && pressedF) {
+      this.scene.start(SceneKey.SchoolHallway, {
+        spawnAt: 'office',
+      });
     }
   }
 

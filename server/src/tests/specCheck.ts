@@ -16,6 +16,7 @@ import {
   markWorldStateMentioned,
   rememberProposal,
   remainingSeconds as remainingSecondsOf,
+  setAgreement,
   sessionStatus,
   SESSION_RETENTION_MS,
 } from '../models/session';
@@ -87,6 +88,11 @@ async function stageData(): Promise<void> {
   ok('스테이지 3 단서 본문 연결', buildRewards(s3).clues.length === 1);
   ok('스테이지 1·2 단서 없음',
     buildRewards(getStage(1)!).clues.length === 0 && buildRewards(getStage(2)!).clues.length === 0);
+
+  // 20번 — 고정 안내문은 성공 응답에만 실린다 (튜토리얼 성공 화면용)
+  for (const stage of stages) {
+    ok(`스테이지 ${stage.stageId} fixedTerms 있음`, stage.fixedTerms.length > 0);
+  }
 
   // 월드 상태 참조는 선언 ∩ 충족만
   ok('월드 상태 참조 교집합',
@@ -441,6 +447,42 @@ async function repairContract(): Promise<void> {
     MAX_REPAIR_REQUESTS_PER_SESSION === 5 && sess.repairRequestCount === 0);
 }
 
+async function successExtras(): Promise<void> {
+  // 20번 — 성공 응답에 고정 안내문, 실패 응답에는 없음
+  const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('고정 안내문 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  ok('진행 중에는 고정 안내문 없음', s.value.fixedTerms === undefined || s.value.fixedTerms === null);
+
+  exhaustCalls(sid);
+  const failed = await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '한 번만요' });
+  ok('실패 응답에는 고정 안내문 없음', failed.ok && !failed.value.fixedTerms);
+  ok('  실패 응답에는 보상도 없음', failed.ok && !failed.value.rewards);
+
+  // 성공 경로는 모든 필수 키를 채워야 한다
+  const win = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!win.ok) return ok('성공 시나리오 시작', false);
+  const wid = win.value.sessionId;
+  skipOpeningTts(wid);
+  const stage = getStage(1)!;
+  const sess = getSession(wid)!;
+  const turn = appendPlayerTurn(wid, id('m'), '평일 5일 전부 하고 다음 주 월요일부터 나오겠습니다');
+  for (const key of stage.requiredAgreementKeys) {
+    setAgreement(wid, key, {
+      status: 'met', summary: '합의', evidenceTurnIds: [turn.id],
+      selfProposalTurnIds: [turn.id], lastAction: 'confirm', updatedAtMs: Date.now(),
+    });
+  }
+  exhaustCalls(wid);
+  const won = await processTurn({ sessionId: wid, requestId: id('r'), messageId: id('m'), playerText: '잘 부탁드립니다' });
+  ok('성공 응답에 고정 안내문', won.ok && (won.value.fixedTerms?.length ?? 0) > 0,
+    won.ok ? String(won.value.outcome) : 'fail');
+  ok('  성공 응답에 보상', won.ok && !!won.value.rewards);
+  ok('  성공 응답에는 실패 문구 없음', won.ok && !won.value.failureText);
+  void sess;
+}
+
 async function readyAndTimer(): Promise<void> {
   // 공통규칙 §3 — 첫 대사 TTS가 끝날 때까지는 ready이고 입력을 받지 않는다
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -561,6 +603,7 @@ async function main(): Promise<void> {
   await repairContract();
   await readyAndTimer();
   await worldStateOnce();
+  await successExtras();
   await asyncReport();
   await idempotency();
   await privacy();

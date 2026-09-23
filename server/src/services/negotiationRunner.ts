@@ -170,7 +170,10 @@ async function handleTurn(
   // retry를 받은 클라이언트가 새 requestId로 다시 보내면 41번째가 실제로 불린다.
   // 그래서 호출하기 전에 여기서 막는다.
   if (session.llmCallCount >= stage.maxLlmCallsPerSession) {
-    return ok(await finish(session, stage, 'failure', 'limit', ''));
+    // 종료 이유는 §6의 우선순위로 정한다. 필수 키가 이미 다 찼다면
+    // 상한에 닿았어도 성공이다. 여기서 failure/limit으로 못 박으면 그걸 덮는다.
+    const { outcome, endReason } = resolveOutcome(session, stage, { fatal: false, nowMs: receivedAtMs });
+    return ok(await finish(session, stage, outcome, endReason, ''));
   }
 
   session.messages.set(input.messageId, { text, applied: null });
@@ -361,6 +364,7 @@ async function finish(
     failureText: outcome === 'failure' ? stage.failureText ?? null : null,
     limitText: endReason === 'limit' ? stage.limitText : null,
     rewards: success ? buildRewards(stage) : null,
+    fixedTerms: success ? stage.fixedTerms : null,
     onClose: stage.onFailureClose ?? 'world_map',
     reportStatus: 'pending',
     styleReport: undefined,

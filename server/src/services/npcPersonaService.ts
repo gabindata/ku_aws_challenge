@@ -42,7 +42,34 @@ export function loadAllStages(): StageDefinition[] {
     stages.push(parsed as StageDefinition);
   }
 
-  return stages.sort((a, b) => a.stageId - b.stageId);
+  const sorted = stages.sort((a, b) => a.stageId - b.stageId);
+  warnDanglingQuests(sorted);
+  return sorted;
+}
+
+/**
+ * 완료 퀘스트가 어디서 추가되는지 확인한다 (공통규칙 §5).
+ *
+ * 어느 스테이지도 추가하지 않는 퀘스트를 완료하면 플레이어의 목록에서
+ * 아무 일도 일어나지 않는다. 로드는 막지 않는다. 튜토리얼이 아직 없어
+ * 거기서 추가될 퀘스트는 지금 당연히 안 보이기 때문이다.
+ */
+function warnDanglingQuests(stages: StageDefinition[]): void {
+  const added = new Set<string>();
+  for (const stage of stages) {
+    for (const quest of stage.successRewards?.addQuests ?? []) added.add(quest);
+  }
+
+  const dangling: string[] = [];
+  for (const stage of stages) {
+    for (const quest of stage.successRewards?.completeQuests ?? []) {
+      if (!added.has(quest)) dangling.push(`스테이지 ${stage.stageId}: "${quest}"`);
+    }
+  }
+  if (dangling.length > 0) {
+    console.warn('[stage] 어느 스테이지도 추가하지 않는 완료 퀘스트 — 튜토리얼에서 추가되는지 확인하세요');
+    for (const d of dangling) console.warn(`  - ${d}`);
+  }
 }
 
 export function getStage(stageId: number): StageDefinition | undefined {

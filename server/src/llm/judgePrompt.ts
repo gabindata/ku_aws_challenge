@@ -253,7 +253,7 @@ function userText(input: JudgeUserInput, exchangeLimit: number): string {
  *
  * 토큰 수는 글자 수 기반 어림으로 잰다. 매 턴 실측을 하면 왕복이 한 번 더 늘어
  * 대화가 느려지기 때문이다. 어림은 넉넉한 쪽으로 잡혀 있어 상한을 넘기지 않는다.
- * 실측이 필요하면 client.countPromptTokens로 확인한다.
+ * 대회 게이트웨이에는 토큰 계산 API가 없어 실측 수단이 없다. 어림이 유일한 기준이다.
  */
 export function buildJudgePrompt(
   input: JudgeUserInput,

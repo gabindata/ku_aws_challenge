@@ -1,3 +1,4 @@
+import { gameSettings } from './GameSettings';
 import * as ort from 'onnxruntime-web';
 
 import {
@@ -69,6 +70,9 @@ export class TTSManager {
 
   constructor() {
     configureOrt(ort);
+    window.addEventListener('game-settings-change', () => {
+      if (this.currentAudio) this.currentAudio.volume = gameSettings.voice;
+    });
   }
 
 
@@ -288,6 +292,7 @@ export class TTSManager {
         const buffer = writeWavFile(wav.slice(0, Math.floor(this.tts.sampleRate * duration[0])), this.tts.sampleRate);
         const url = URL.createObjectURL(new Blob([buffer as BlobPart], { type: 'audio/wav' }));
         const audio = new Audio(url);
+        audio.volume = gameSettings.voice;
         this.currentAudio = audio;
         this.currentAudioUrl = url;
         await new Promise<void>((resolve, reject) => {
@@ -321,6 +326,7 @@ export class TTSManager {
     if (!('speechSynthesis' in window)) throw new Error('이 브라우저는 TTS를 지원하지 않습니다.');
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ko-KR';
+    utterance.volume = gameSettings.voice;
     const settings: Record<string, [number, number]> = { store_owner_yang: [0.9, 0.75], ta_han: [0.95, 0.9], landlord: [1, 1.05] };
     [utterance.rate, utterance.pitch] = settings[npcId] ?? [1, 1];
     const voice = window.speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith('ko'));

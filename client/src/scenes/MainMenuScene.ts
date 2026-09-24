@@ -1,3 +1,4 @@
+import { gameSettings, applyBrightness } from '../systems/GameSettings';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { SettingsPanel } from '../ui/SettingsPanel';
@@ -13,6 +14,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    applyBrightness();
     // TODO: ApiClient.getStages() → 버튼 생성 → 클릭 시
     //       this.scene.start(SceneKey.Negotiation, { npcId })
 
@@ -31,7 +33,7 @@ export class MainMenuScene extends Phaser.Scene {
     if (!this.sound.get('main-bgm')) {
       this.sound.play('main-bgm', {
         loop: true,
-        volume: 0.4,
+        volume: gameSettings.bgm,
       });
     }
 
@@ -191,7 +193,7 @@ export class MainMenuScene extends Phaser.Scene {
     button.on('pointerover', () => {
       button.setTexture('button-highlight');
       this.sound.play('button-hover', {
-        volume: 0.4,
+        volume: gameSettings.ui,
       });
     });
 
@@ -204,7 +206,7 @@ export class MainMenuScene extends Phaser.Scene {
     button.on('pointerdown', () => {
       button.setTexture('button-highlight');
       this.sound.play('button-click', {
-        volume: 0.4,
+        volume: gameSettings.ui,
       });
       onClick();
     });

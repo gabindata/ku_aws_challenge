@@ -45,8 +45,8 @@ export class HouseScene extends Phaser.Scene {
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F);
     this.exitZone = this.add.zone(width * 0.50, height * 0.80, width * 0.17, height * 0.10);
     this.physics.add.existing(this.exitZone, true);
-    this.exitText = this.add.text(width * 0.50, height * 0.87, '[F] 나가기', {
-      fontFamily: 'YPairing', fontSize: '26px', color: '#ffffff', backgroundColor: '#000000aa',
+    this.exitText = this.add.text(width * 0.50, height * 0.87, '[F]', {
+      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '26px', color: '#ffffff', backgroundColor: '#000000aa',
       padding: { x: 10, y: 6 },
     }).setOrigin(0.5).setDepth(10000).setVisible(false);
     new BackButton(this, () => this.leaveHouse());

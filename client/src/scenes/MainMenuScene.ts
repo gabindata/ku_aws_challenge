@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { SettingsPanel } from '../ui/SettingsPanel';
+import { playUiClick } from '../ui/UiFeedback';
 
 /** 스테이지 선택. GET /api/stages 결과를 난이도 순으로 나열한다. */
 /**홈 화면 */
@@ -14,9 +15,9 @@ export class MainMenuScene extends Phaser.Scene {
   async create(): Promise<void> {
     // TODO: ApiClient.getStages() → 버튼 생성 → 클릭 시
     //       this.scene.start(SceneKey.Negotiation, { npcId })
-  
+
     const { width, height } = this.scale;
-    
+
     //배경 이미지
     const background = this.add.image(
       width / 2,
@@ -25,7 +26,7 @@ export class MainMenuScene extends Phaser.Scene {
     );
 
     background.setDisplaySize(width, height);
-    
+
     //배경 bgm
     if (!this.sound.get('main-bgm')) {
       this.sound.play('main-bgm', {
@@ -40,10 +41,10 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     // 시작하기 버튼
-    this.createMenuButton(width / 2, 750, '시작하기', () => { 
+    this.createMenuButton(width / 2, 750, '시작하기', () => {
       const tutorialCompleted =
         localStorage.getItem('tutorialCompleted');
-    
+
       if (tutorialCompleted === 'true') {
         this.scene.start(SceneKey.StageSelect);
       } else {
@@ -57,6 +58,7 @@ export class MainMenuScene extends Phaser.Scene {
     settings.on('pointerover', () => settings.setTint(0xbbeeff));
     settings.on('pointerout', () => settings.clearTint());
     settings.on('pointerdown', () => {
+      playUiClick(this);
       if (!this.settingsPanel) {
         this.settingsPanel = new SettingsPanel(this, () => {
           this.settingsPanel = undefined;
@@ -64,7 +66,7 @@ export class MainMenuScene extends Phaser.Scene {
       }
     });
   }
-  
+
 
   //튜툐리얼 봤는지 확인하는 코드//
   private showTutorialRequiredPopup(): void {
@@ -104,6 +106,8 @@ export class MainMenuScene extends Phaser.Scene {
         height / 2 + 70,
         '예',
         {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
           fontSize: '26px',
           color: '#ffffff',
           backgroundColor: '#555555',
@@ -122,6 +126,8 @@ export class MainMenuScene extends Phaser.Scene {
         height / 2 + 70,
         '아니요',
         {
+          fontFamily: 'YPairing',
+          fontStyle: 'bold',
           fontSize: '26px',
           color: '#ffffff',
           backgroundColor: '#555555',
@@ -142,12 +148,14 @@ export class MainMenuScene extends Phaser.Scene {
       noButton.destroy();
     };
 
-    yesButton.on('pointerdown', () => { 
-      closePopup(); 
+    yesButton.on('pointerdown', () => {
+      playUiClick(this);
+      closePopup();
       this.scene.start(SceneKey.Tutorial);
     });
 
     noButton.on('pointerdown', () => {
+      playUiClick(this);
       closePopup();
       this.scene.start(SceneKey.StageSelect);
     });
@@ -163,7 +171,7 @@ export class MainMenuScene extends Phaser.Scene {
       .image(x, y, 'button-default')
       .setDisplaySize(500, 90)
       .setInteractive({ useHandCursor: true });
-    
+
     const label = this.add
     .text(x, y, text, {
       fontSize: '36px',
@@ -177,8 +185,8 @@ export class MainMenuScene extends Phaser.Scene {
         bottom: 8,
       },
     })
-    .setOrigin(0.5); 
-    
+    .setOrigin(0.5);
+
     //마우스를 버튼 위에 올렸을 때
     button.on('pointerover', () => {
       button.setTexture('button-highlight');
@@ -186,12 +194,12 @@ export class MainMenuScene extends Phaser.Scene {
         volume: 0.4,
       });
     });
-    
+
     //마우스 버튼 밖
     button.on('pointerout', () => {
       button.setTexture('button-default');
     });
-    
+
     //버튼 누르는 순간
     button.on('pointerdown', () => {
       button.setTexture('button-highlight');
@@ -200,7 +208,7 @@ export class MainMenuScene extends Phaser.Scene {
       });
       onClick();
     });
-    
+
     //버튼에서 손을 뗐을 때
     button.on('pointerup', () => {
       button.setTexture('button-default');

@@ -1,3 +1,4 @@
+import { StageInfoPanel } from '../ui/StageInfoPanel';
 
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
@@ -149,6 +150,7 @@ const INTERACTION_AREAS: InteractionArea[] = [
 
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
+  private stageInfoPanel!: StageInfoPanel;
   private returnPosition?: { x: number; y: number };
 
   private timeOfDay!: TimeOfDaySystem;
@@ -382,6 +384,18 @@ export class StageSelectScene extends Phaser.Scene {
       1 / this.cameras.main.zoom
     );
 
+    this.stageInfoPanel = new StageInfoPanel(this, {
+      stageTitle: 'STAGE 3',
+      npcName: '고금자',
+      description: '집주인 고금자와 대화하고 협상을 진행하세요.',
+      onStart: () => {
+        this.scene.start(SceneKey.Negotiation3, { npcId: 'landlord', returnTo: {
+          scene: SceneKey.StageSelect,
+          position: { x: this.player.x / this.scale.width, y: this.player.y / this.scale.height },
+        } });
+      },
+    });
+
     // =========================
     // 다른 씬으로 이동할 때 게임 시간 저장
     // =========================
@@ -398,6 +412,11 @@ export class StageSelectScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.stageInfoPanel.isOpen) {
+      this.player.setVelocity(0, 0);
+      this.enterText.setVisible(false);
+      return;
+    }
     this.player.update();
 
     this.timeOfDay.update(delta);
@@ -475,10 +494,8 @@ export class StageSelectScene extends Phaser.Scene {
           break;
         // 집주인 옆 F → 고금자 협상
         case 'landlord':
-          this.scene.start(SceneKey.Negotiation3, { npcId: 'landlord', returnTo: {
-            scene: SceneKey.StageSelect,
-            position: { x: this.player.x / this.scale.width, y: this.player.y / this.scale.height },
-          } });
+          this.player.setVelocity(0, 0);
+          this.stageInfoPanel.open();
           break;
       }
     }
@@ -675,7 +692,7 @@ export class StageSelectScene extends Phaser.Scene {
         '00:00',
         {
           fontFamily: 'YPairing',
-          fontStyle: 'bold',
+          fontStyle: 'normal',
           fontSize: '32px',
           color: '#ffffff',
           align: 'center',

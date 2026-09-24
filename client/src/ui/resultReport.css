@@ -15,7 +15,7 @@
   margin:auto;
   padding:40px 0 64px}
 .result-report .eyebrow {
-  font:700 12px/1.5 sans-serif;
+  font:400 14px/1.5 YPairing,sans-serif;
   letter-spacing:.2em;
   margin:0 0 20px;
   color:#666963}
@@ -164,3 +164,8 @@
 .result-report button:hover, .result-report button:focus-visible {
   background: transparent url('/assets/images/ui/button-highlight.png') center / 100% 100% no-repeat;
 }
+
+.result-report { font-family: YPairing, sans-serif; font-weight: 400; }
+.result-report h1, .result-report h2, .result-report h3, .result-report p,
+.result-report blockquote, .result-report figcaption { font-weight: 400; }
+.result-report button, .result-report .observation h3 { font-weight: 700; }

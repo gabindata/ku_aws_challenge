@@ -269,395 +269,86 @@ export class TTSManager {
   /**
    * NPC 대사 재생
    */
-  async speak(
-    text: string,
-    npcId: string
-  ): Promise<void> {
+  private speechGeneration = 0;
+  private finishPlayback?: () => void;
 
-    if (!text.trim()) {
-      return;
-    }
-
+  async speak(text: string, npcId: string): Promise<void> {
+    this.cancel();
+    const generation = this.speechGeneration;
+    if (!text.trim()) return;
     await this.init();
-
-
-    /**
-     * Supertonic 초기화 실패 시
-     * Browser TTS
-     */
-    if (
-      !this.supertonicAvailable ||
-      !this.tts
-    ) {
-
-      console.warn(
-        'Supertonic 사용 불가 → Browser TTS'
-      );
-
-      return this.speakBrowser(
-        text,
-        npcId
-      );
-    }
-
-
-    try {
-
-      await this.speakSupertonic(
-        text,
-        npcId
-      );
-
-    } catch (error) {
-
-      console.error(
-        'Supertonic 음성 생성 실패:',
-        error
-      );
-
-      console.warn(
-        'Browser TTS fallback'
-      );
-
-      await this.speakBrowser(
-        text,
-        npcId
-      );
-    }
-  }
-
-
-  /**
-   * 실제 Supertonic 음성 생성
-   */
-  private async speakSupertonic(
-    text: string,
-    npcId: string
-  ): Promise<void> {
-
-    this.cancelAudio();
-
-    const voiceId =
-      NPC_VOICES[npcId]
-      ?? 'F1';
-
-    console.log(
-      `TTS 생성 시작: ${npcId} → ${voiceId}`
-    );
-
-    const style =
-      await this.getVoiceStyle(
-        voiceId
-      );
-
-
-    /**
-     * Supertonic 합성
-     *
-     * steps = 4
-     * 기존 8보다 빠름
-     */
-    const {
-      wav,
-      duration,
-    } =
-      await this.tts.call(
-        text,
-        'ko',
-        style,
-        4,
-        0.95,
-        0.3
-      );
-
-
-    const wavLength =
-      Math.floor(
-        this.tts.sampleRate *
-        duration[0]
-      );
-
-    const wavOutput =
-      wav.slice(
-        0,
-        wavLength
-      );
-
-    const wavBuffer =
-      writeWavFile(
-        wavOutput,
-        this.tts.sampleRate
-      );
-
-    const blob =
-      new Blob(
-        [
-          wavBuffer as BlobPart,
-        ],
-        {
-          type: 'audio/wav',
-        }
-      );
-
-    const audioUrl =
-      URL.createObjectURL(
-        blob
-      );
-
-    this.currentAudioUrl =
-      audioUrl;
-
-    const audio =
-      new Audio(
-        audioUrl
-      );
-
-    this.currentAudio =
-      audio;
-
-
-    return new Promise<void>(
-      (resolve, reject) => {
-
-        audio.onended = () => {
-
-          console.log(
-            'Supertonic TTS 재생 완료'
-          );
-
-          this.cleanupAudio();
-
-          resolve();
-        };
-
-
-        audio.onerror = () => {
-
-          this.cleanupAudio();
-
-          reject(
-            new Error(
-              'Supertonic Audio 재생 실패'
-            )
-          );
-        };
-
-
-        audio
-          .play()
-          .catch(
-            (error) => {
-
-              this.cleanupAudio();
-
-              reject(error);
+    if (generation !== this.speechGeneration) return;
+    if (this.supertonicAvailable && this.tts) {
+      try {
+        const voiceId = NPC_VOICES[npcId] ?? 'F1';
+        const style = await this.getVoiceStyle(voiceId);
+        if (generation !== this.speechGeneration) return;
+        const { wav, duration } = await this.tts.call(text, 'ko', style, 4, 0.95, 0.3);
+        if (generation !== this.speechGeneration) return;
+        const buffer = writeWavFile(wav.slice(0, Math.floor(this.tts.sampleRate * duration[0])), this.tts.sampleRate);
+        const url = URL.createObjectURL(new Blob([buffer as BlobPart], { type: 'audio/wav' }));
+        const audio = new Audio(url);
+        this.currentAudio = audio;
+        this.currentAudioUrl = url;
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const finish = (error?: unknown) => {
+            if (settled) return;
+            settled = true;
+            audio.onended = null;
+            audio.onerror = null;
+            URL.revokeObjectURL(url);
+            if (this.currentAudio === audio) {
+              this.currentAudio = null;
+              this.currentAudioUrl = null;
+              this.finishPlayback = undefined;
             }
-          );
+            if (error && generation === this.speechGeneration) reject(error);
+            else resolve();
+          };
+          this.finishPlayback = () => finish();
+          audio.onended = () => finish();
+          audio.onerror = () => finish(new Error('음성 재생 실패'));
+          audio.play().catch(finish);
+        });
+        return;
+      } catch (error) {
+        if (generation !== this.speechGeneration) return;
+        console.warn('Supertonic 재생 실패, 브라우저 음성 사용:', error);
       }
-    );
+    }
+    if (generation !== this.speechGeneration) return;
+    if (!('speechSynthesis' in window)) throw new Error('이 브라우저는 TTS를 지원하지 않습니다.');
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    const settings: Record<string, [number, number]> = { store_owner_yang: [0.9, 0.75], ta_han: [0.95, 0.9], landlord: [1, 1.05] };
+    [utterance.rate, utterance.pitch] = settings[npcId] ?? [1, 1];
+    const voice = window.speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith('ko'));
+    if (voice) utterance.voice = voice;
+    await new Promise<void>((resolve, reject) => {
+      const finish = (error?: string) => {
+        utterance.onend = null;
+        utterance.onerror = null;
+        if (generation === this.speechGeneration) this.finishPlayback = undefined;
+        if (error && generation === this.speechGeneration) reject(new Error(error));
+        else resolve();
+      };
+      this.finishPlayback = () => finish();
+      utterance.onend = () => finish();
+      utterance.onerror = event => finish(event.error);
+      window.speechSynthesis.speak(utterance);
+    });
   }
 
-
-  /**
-   * Supertonic 실패 시 브라우저 기본 TTS
-   */
-  private speakBrowser(
-    text: string,
-    npcId: string
-  ): Promise<void> {
-
-    if (
-      !(
-        'speechSynthesis'
-        in window
-      )
-    ) {
-
-      return Promise.reject(
-        new Error(
-          '이 브라우저는 TTS를 지원하지 않습니다.'
-        )
-      );
-    }
-
-
-    window
-      .speechSynthesis
-      .cancel();
-
-
-    const utterance =
-      new SpeechSynthesisUtterance(
-        text
-      );
-
-
-    utterance.lang =
-      'ko-KR';
-
-
-    switch (npcId) {
-
-      case 'store_owner_yang':
-
-        utterance.rate =
-          0.9;
-
-        utterance.pitch =
-          0.75;
-
-        break;
-
-
-      case 'ta_han':
-
-        utterance.rate =
-          0.95;
-
-        utterance.pitch =
-          0.9;
-
-        break;
-
-
-      case 'landlord':
-
-        utterance.rate =
-          1.0;
-
-        utterance.pitch =
-          1.05;
-
-        break;
-
-
-      default:
-
-        utterance.rate =
-          1.0;
-
-        utterance.pitch =
-          1.0;
-    }
-
-
-    const voices =
-      window
-        .speechSynthesis
-        .getVoices();
-
-
-    const koreanVoice =
-      voices.find(
-        (voice) =>
-          voice.lang
-            .toLowerCase()
-            .startsWith('ko')
-      );
-
-
-    if (koreanVoice) {
-
-      utterance.voice =
-        koreanVoice;
-    }
-
-
-    return new Promise<void>(
-      (resolve, reject) => {
-
-        utterance.onend =
-          () => {
-
-            console.log(
-              'Browser TTS 재생 완료'
-            );
-
-            resolve();
-          };
-
-
-        utterance.onerror =
-          (event) => {
-
-            reject(
-              new Error(
-                `Browser TTS 오류: ${event.error}`
-              )
-            );
-          };
-
-
-        window
-          .speechSynthesis
-          .speak(
-            utterance
-          );
-      }
-    );
-  }
-
-
-  /**
-   * 현재 재생 중인 TTS 전부 중단
-   */
+  /** 생성 중인 작업도 무효화하여 화면을 떠난 뒤 재생되지 않게 한다. */
   cancel(): void {
-
-    this.cancelAudio();
-
-
-    if (
-      'speechSynthesis'
-      in window
-    ) {
-
-      window
-        .speechSynthesis
-        .cancel();
-    }
-  }
-
-
-  /**
-   * Supertonic Audio 중단
-   */
-  private cancelAudio(): void {
-
-    if (
-      this.currentAudio
-    ) {
-
-      this.currentAudio.pause();
-
-      this.currentAudio.currentTime =
-        0;
-    }
-
-
-    this.cleanupAudio();
-  }
-
-
-  /**
-   * Blob URL 정리
-   */
-  private cleanupAudio(): void {
-
-    if (
-      this.currentAudioUrl
-    ) {
-
-      URL.revokeObjectURL(
-        this.currentAudioUrl
-      );
-    }
-
-
-    this.currentAudio =
-      null;
-
-
-    this.currentAudioUrl =
-      null;
+    this.speechGeneration += 1;
+    this.currentAudio?.pause();
+    this.finishPlayback?.();
+    this.finishPlayback = undefined;
+    if (this.currentAudioUrl) URL.revokeObjectURL(this.currentAudioUrl);
+    this.currentAudio = null;
+    this.currentAudioUrl = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }
 }

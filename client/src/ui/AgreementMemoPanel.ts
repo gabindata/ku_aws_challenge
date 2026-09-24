@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { AgreementMemoItem } from '../types';
+import { playUiClick } from './UiFeedback';
 
 /** 서버가 공개한 성립 합의만 표시한다. 매 응답의 전체 목록으로 교체한다. */
 export class AgreementMemoPanel {
@@ -12,13 +13,13 @@ export class AgreementMemoPanel {
 
   constructor(scene: Phaser.Scene, x: number, y: number, width = 530) {
     scene.add.image(x, y, 'common-panel').setDisplaySize(width, 300).setOrigin(0).setDepth(30);
-    scene.add.text(x + 20, y + 16, '합의 메모', { fontFamily: 'YPairing', fontSize: '26px', color: '#ffffff' }).setDepth(31);
-    this.text = scene.add.text(x + 20, y + 65, '', { fontFamily: 'YPairing', fontSize: '24px', color: '#ffffff', wordWrap: { width: width - 40 } }).setDepth(31);
-    this.previous = scene.add.text(x + 20, y + 257, '◀', { fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
-    this.next = scene.add.text(x + width - 48, y + 257, '▶', { fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
-    this.pageLabel = scene.add.text(x + width / 2, y + 257, '', { fontSize: '22px' }).setOrigin(0.5, 0).setDepth(31);
-    this.previous.on('pointerdown', () => { this.page = Math.max(0, this.page - 1); this.render(); });
-    this.next.on('pointerdown', () => { this.page = Math.min(this.items.length - 1, this.page + 1); this.render(); });
+    scene.add.text(x + 32, y + 16, '합의 메모', { fontFamily: 'YPairing', fontStyle: 'normal', fontSize: '26px', color: '#ffffff' }).setDepth(31);
+    this.text = scene.add.text(x + 32, y + 65, '', { fontFamily: 'YPairing', fontSize: '24px', color: '#ffffff', wordWrap: { width: width - 64 } }).setDepth(31);
+    this.previous = scene.add.text(x + 20, y + 257, '◀', { fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
+    this.next = scene.add.text(x + width - 48, y + 257, '▶', { fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
+    this.pageLabel = scene.add.text(x + width / 2, y + 257, '', { fontFamily: 'YPairing', fontSize: '20px' }).setOrigin(0.5, 0).setDepth(31);
+    this.previous.on('pointerdown', () => { playUiClick(scene); this.page = Math.max(0, this.page - 1); this.render(); });
+    this.next.on('pointerdown', () => { playUiClick(scene); this.page = Math.min(this.items.length - 1, this.page + 1); this.render(); });
     this.update([]);
   }
 

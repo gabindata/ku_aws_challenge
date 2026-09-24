@@ -1,5 +1,6 @@
 
 import Phaser from 'phaser';
+import { playUiClick } from './UiFeedback';
 
 export class BackButton {
   public readonly button: Phaser.GameObjects.Text;
@@ -34,7 +35,10 @@ export class BackButton {
         useHandCursor: true,
       });
 
-    this.button.on('pointerdown', onClick);
+    this.button.on('pointerdown', () => {
+      playUiClick(scene);
+      onClick();
+    });
 
     this.button.on('pointerover', () => {
       this.button.setAlpha(0.8);

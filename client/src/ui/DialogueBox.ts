@@ -31,6 +31,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
       -117,
       this.npcName,
       {
+        fontFamily: 'YPairing',
         fontSize: '28px',
         color: '#ffff66',
         fontStyle: 'bold',
@@ -43,7 +44,9 @@ export class DialogueBox extends Phaser.GameObjects.Container {
       -20,
       '',
       {
+        fontFamily: 'YPairing',
         fontSize: '26px',
+        fontStyle: 'normal',
         color: '#ffffff',
         wordWrap: {
           width: width - 80,

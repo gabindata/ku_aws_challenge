@@ -1,4 +1,4 @@
-import type { TurnResponse } from '../types';
+import type { ClientNegotiationView } from '../types';
 import './resultReport.css';
 const AXES = [['formality','발화 격식','일상적','격식적'],['directness','직접성','암시적','직접적'],['cushion','쿠션 표현','적게 사용','많이 사용'],['length','발화 길이','짧게','길게']] as const;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = '') {
@@ -10,11 +10,11 @@ export class ResultReportView {
   private analysis = el('div');
   private notice = el('p', '', 'connection');
   private signature = '';
-  constructor(view: TurnResponse, onExit: () => void, onRetry: () => void) {
+  constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void) {
     this.root.tabIndex = -1;
     this.root.setAttribute('aria-label','협상 결과 리포트');
     const page = el('div','','report-page');
-    page.append(el('p',`STAGE ${view.stageId} · 대화 기록`,'eyebrow'));
+    page.append(el('p',`STAGE ${stageId} · 대화 기록`,'eyebrow'));
     const hero = el('section','','card hero');
     const success = view.outcome === 'success';
     hero.append(el('h1',success ? '성공!' : '실패!'));
@@ -30,7 +30,7 @@ export class ResultReportView {
     img.alt = success ? '기쁜 너구리' : '아쉬운 너구리'; hero.append(img);
     this.notice.setAttribute('role','status');
     const actions = el('footer','','actions');
-    const button = (text: string, fn: () => void) => { const b=el('button',text); b.type='button'; b.onclick=fn; return b; };
+    const button = (text: string, fn: () => void) => { const b=el('button',text); b.type='button'; b.onclick=() => { onButtonClick(); fn(); }; return b; };
     if (!success) actions.append(button('다시 하기',onRetry));
     if (success || view.onClose !== 'restart') actions.append(button('나가기',onExit));
     page.append(hero,this.notice,this.analysis,actions); this.root.append(page);
@@ -40,7 +40,7 @@ export class ResultReportView {
   private section(title: string, cls=''): HTMLElement {
     const s=el('section','',`card ${cls}`); s.append(el('h2',title)); this.analysis.append(s); return s;
   }
-  update(view: TurnResponse): void {
+  update(view: ClientNegotiationView): void {
     const signature=JSON.stringify([view.reportStatus,view.styleReport]);
     if (signature===this.signature) return;
     this.signature=signature;

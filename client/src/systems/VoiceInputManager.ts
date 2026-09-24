@@ -51,57 +51,57 @@ export class VoiceInputManager {
       return;
     }
 
-    this.recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognition();
+    this.recognition = recognition;
+    // onstart 이전에도 중복 시작을 막는다.
+    this.isListening = true;
+    recognition.lang = 'ko-KR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-    // 한국어
-    this.recognition.lang = 'ko-KR';
-
-    // 한 번의 발화를 인식하고 종료
-    this.recognition.continuous = false;
-
-    // 최종 결과만 사용
-    this.recognition.interimResults = false;
-
-    // STT 시작
-    this.recognition.onstart = () => {
-      this.isListening = true;
-
-      console.log('STT 시작');
+    const finish = (callback: () => void): void => {
+      if (this.recognition !== recognition) return;
+      // 콜백이 재시도를 시작하기 전에 이전 인식과 이벤트를 정리한다.
+      this.stop();
+      callback();
     };
 
-    // STT 성공
-    this.recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-
-      console.log('STT 결과:', text);
-
-      onResult(text);
+    recognition.onstart = () => {
+      if (this.recognition === recognition) console.log('STT 시작');
+    };
+    recognition.onresult = (event: any) => {
+      const text = event.results?.[0]?.[0]?.transcript ?? '';
+      finish(() => onResult(text));
+    };
+    recognition.onerror = (event: any) => {
+      finish(() => onError?.(event));
+    };
+    recognition.onend = () => {
+      // 결과/오류 없이 종료돼도 화면의 빈 발화 복구 처리를 실행한다.
+      finish(() => onResult(''));
     };
 
-    // STT 실패
-    this.recognition.onerror = (event: any) => {
-      console.error('STT 오류:', event.error);
-
-      onError?.(event);
-    };
-
-    // STT 종료
-    this.recognition.onend = () => {
-      this.isListening = false;
-
-      console.log('STT 종료');
-    };
-
-    // 실제 음성 인식 시작
-    this.recognition.start();
+    try {
+      recognition.start();
+    } catch (error) {
+      finish(() => onError?.(error));
+    }
   }
 
-  /** 음성 인식 강제 종료 */
+  /** 화면 이탈 시에는 결과 콜백 없이 녹음과 뒤늦은 이벤트를 취소한다. */
   stop(): void {
-    if (!this.recognition || !this.isListening) {
-      return;
+    const recognition = this.recognition;
+    this.recognition = null;
+    this.isListening = false;
+    if (!recognition) return;
+    recognition.onstart = null;
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    try {
+      recognition.abort();
+    } catch {
+      // 이미 종료된 브라우저 인식기는 추가 취소가 필요 없다.
     }
-
-    this.recognition.stop();
   }
 }

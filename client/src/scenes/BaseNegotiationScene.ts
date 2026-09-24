@@ -1,4 +1,5 @@
 import { SessionResultPoller } from '../systems/SessionResultPoller';
+import { playUiClick } from '../ui/UiFeedback';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import type { ReturnLocation } from '../types';
@@ -43,6 +44,10 @@ export class BaseNegotiationScene extends Phaser.Scene {
   private remainingSeconds = 600;
   private resultPoller?: SessionResultPoller;
   private serverReady = false;
+  private legacyResultApi = false;
+  private displayDeadline = 0;
+  private timeoutRequest?: AbortController;
+  private nextTimeoutCheck = 0;
   private speaking = false;
   private recording = false;
 
@@ -60,6 +65,10 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.turnBusy = false;
     this.ended = false;
     this.serverReady = false;
+    this.legacyResultApi = false;
+    this.displayDeadline = 0;
+    this.nextTimeoutCheck = 0;
+    this.timeoutRequest = undefined;
     this.speaking = false;
     this.recording = false;
     this.latestResponse = null;
@@ -149,11 +158,12 @@ export class BaseNegotiationScene extends Phaser.Scene {
     );
 
     this.retryButton = this.add.text(width / 2, height - 160, '같은 발화 다시 전송', {
-      fontSize: '24px', color: '#ffffff', backgroundColor: '#333333',
+      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px', color: '#ffffff', backgroundColor: '#333333',
       padding: { x: 16, y: 8 },
     }).setOrigin(0.5).setDepth(40).setVisible(false)
       .setInteractive({ useHandCursor: true });
     this.retryButton.on('pointerdown', () => {
+      playUiClick(this);
       void this.submitPendingTurn();
     });
 
@@ -164,13 +174,15 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.timerDisplay = new TimerDisplay(
       this,
       150,
-      80
+      130
     );
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       // 이전 입장의 응답이 재입장한 화면을 변경하지 못하게 한다.
       this.sceneGeneration += 1;
       this.sessionId = null;
+      this.timeoutRequest?.abort();
+      this.timeoutRequest = undefined;
       this.resultPoller?.stop();
       this.resultPoller = undefined;
       this.voiceInput.stop();
@@ -193,8 +205,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
       this.sessionId = response.sessionId;
       this.applyPresentation(response);
-      this.remainingSeconds = response.remainingSeconds ?? 600;
-      this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+      this.syncTimer(response.remainingSeconds ?? 600);
       this.startResultPolling();
       await this.playNpcLine(response.npcReply);
       if (generation !== this.sceneGeneration) return;
@@ -385,8 +396,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.latestResponse = response;
       this.applyPresentation(response);
       if (response.remainingSeconds !== null) {
-        this.remainingSeconds = response.remainingSeconds;
-        this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+        this.syncTimer(response.remainingSeconds);
       }
 
       if (response.outcome === 'retry') {
@@ -408,6 +418,16 @@ export class BaseNegotiationScene extends Phaser.Scene {
     } catch (error) {
       if (generation !== this.sceneGeneration) return;
       if (this.ended) return;
+      if (error instanceof ApiError && error.missingSession) {
+        this.ended = true;
+        this.pendingTurn = null;
+        this.resultPoller?.stop();
+        this.voiceInput.stop();
+        this.ttsManager.cancel();
+        this.dialogueBox.setSpeaker('system');
+        this.dialogueBox.showText('서버에 대화 기록이 없어요. 뒤로가기로 나간 뒤 다시 시작해 주세요.');
+        return;
+      }
       // 처리 여부를 모르므로 pendingTurn의 내용과 두 ID를 그대로 보존한다.
       console.error('턴 처리 오류:', error);
       this.dialogueBox.setSpeaker('system');
@@ -439,13 +459,19 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.serverReady = result.sessionStatus === 'in_progress';
       // 서버의 남은 시간을 그대로 표시한다. 클라이언트가 종료를 판정하지 않는다.
       if (result.remainingSeconds !== null) {
-        this.remainingSeconds = result.remainingSeconds;
-        this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+        this.syncTimer(result.remainingSeconds);
       }
       this.updateInputState();
     }, (error) => {
       if (generation !== this.sceneGeneration || this.ended) return;
-      if (error instanceof ApiError && error.status === 404) {
+      if (error instanceof ApiError && error.missingResultEndpoint) {
+        this.resultPoller?.stop();
+        this.legacyResultApi = true;
+        this.serverReady = true;
+        this.updateInputState();
+        return;
+      }
+      if (error instanceof ApiError && error.missingSession) {
         this.ended = true;
         this.resultPoller?.stop();
         this.voiceInput.stop();
@@ -458,6 +484,67 @@ export class BaseNegotiationScene extends Phaser.Scene {
     });
   }
 
+  private syncTimer(seconds: number): void {
+    this.displayDeadline = performance.now() + Math.max(0, seconds) * 1000;
+    this.remainingSeconds = Math.min(600, Math.max(0, seconds));
+    this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+  }
+
+  update(): void {
+    if (!this.legacyResultApi || this.ended || !this.displayDeadline) return;
+    this.remainingSeconds = Math.min(600, Math.max(0, Math.ceil((this.displayDeadline - performance.now()) / 1000)));
+    this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
+    if (this.remainingSeconds <= 0 && !this.turnBusy && !this.timeoutRequest && performance.now() >= this.nextTimeoutCheck) {
+      void this.collectTimeoutResult();
+    }
+  }
+
+  /** 빈 요청은 발화를 추가하지 않고 서버가 자동 생성한 종료 결과만 확인한다. */
+  private async collectTimeoutResult(): Promise<void> {
+    if (!this.sessionId) return;
+    const generation = this.sceneGeneration;
+    const controller = new AbortController();
+    this.timeoutRequest = controller;
+    this.pendingTurn = null;
+    this.recording = false;
+    this.voiceInput.stop();
+    this.ttsManager.cancel();
+    this.micButton.setRecording(false);
+    this.retryButton.setVisible(false);
+    this.updateInputState();
+    this.dialogueBox.setSpeaker('system');
+    this.dialogueBox.showText('시간이 끝났어요. 결과 리포트를 불러오고 있어요.');
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await sendTurn({
+        sessionId: this.sessionId, messageId: newMessageId(), requestId: newRequestId(), playerText: '',
+      }, controller.signal);
+      if (generation !== this.sceneGeneration || this.ended) return;
+      if (response.outcome === 'success' || response.outcome === 'failure') {
+        this.finishNegotiation(response);
+      } else if (response.remainingSeconds !== null && response.remainingSeconds > 0) {
+        // 처리 중이던 턴에 서버가 인정한 정지 시간이 있으면 최신 마감을 따른다.
+        this.syncTimer(response.remainingSeconds);
+        this.dialogueBox.showText('서버에서 남은 시간을 갱신했어요. 대화를 계속해 주세요.');
+        this.updateInputState();
+      }
+    } catch (error) {
+      if (generation !== this.sceneGeneration || this.ended) return;
+      if (error instanceof ApiError && error.missingSession) {
+        this.ended = true;
+        this.dialogueBox.showText('서버에 대화 기록이 없어 리포트를 불러올 수 없어요. 뒤로가기로 나가 다시 시작해 주세요.');
+      } else {
+        this.dialogueBox.showText('결과를 아직 받지 못했어요. 서버 연결을 다시 확인하고 있어요.');
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (generation === this.sceneGeneration) {
+        this.timeoutRequest = undefined;
+        this.nextTimeoutCheck = performance.now() + 2000;
+      }
+    }
+  }
+
   private finishNegotiation(response: TurnResponse): void {
     if (this.ended) return;
     this.ended = true;
@@ -467,6 +554,6 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.ttsManager.cancel();
     this.retryButton.setVisible(false);
     this.updateInputState();
-    this.scene.start(SceneKey.Result, { sessionId: this.sessionId, view: response, returnTo: this.returnTo });
+    this.scene.start(SceneKey.Result, { sessionId: this.sessionId, view: response, stageId: this.stage.stageId, returnTo: this.returnTo });
   }
 }

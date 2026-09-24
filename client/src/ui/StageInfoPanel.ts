@@ -1,3 +1,4 @@
+import { gameSettings } from '../systems/GameSettings';
 import Phaser from 'phaser';
 
 interface StageInfoPanelConfig {
@@ -187,7 +188,7 @@ export class StageInfoPanel {
       button.setTexture('button-highlight');
 
       this.scene.sound.play('button-hover', {
-        volume: 0.4,
+        volume: gameSettings.ui,
       });
     });
 
@@ -201,7 +202,7 @@ export class StageInfoPanel {
       button.setTexture('button-highlight');
 
       this.scene.sound.play('button-click', {
-        volume: 0.4,
+        volume: gameSettings.ui,
       });
 
       onClick();

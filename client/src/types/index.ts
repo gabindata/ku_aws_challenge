@@ -25,3 +25,20 @@ export interface ReturnLocation {
   scene: string;
   position: { x: number; y: number };
 }
+
+
+/** main의 공용 타입과 비동기 결과 API 양쪽을 받는 client 표시용 계약. */
+export type ClientNegotiationView = import('../../../shared/types/negotiationTypes').NegotiationView & {
+  sessionId?: string;
+  stageId?: number;
+  reportStatus?: 'pending' | 'ready' | 'failed';
+  styleReport?: import('../../../shared/types/styleReportTypes').StyleReport;
+};
+
+export interface ResultResponse {
+  sessionId: string;
+  stageId: number;
+  sessionStatus: 'ready' | 'in_progress' | 'ended';
+  remainingSeconds: number | null;
+  view: ClientNegotiationView | null;
+}

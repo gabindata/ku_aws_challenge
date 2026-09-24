@@ -271,7 +271,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
       .text(
         width * (960 / SOURCE_WIDTH),
         height * (920 / SOURCE_HEIGHT),
-        'F',
+        '[F]',
         {
           fontFamily: 'YPairing',
           fontStyle: 'bold',

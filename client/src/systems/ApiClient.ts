@@ -30,13 +30,14 @@ export function newMessageId(): string {
   return `msg_${crypto.randomUUID()}`;
 }
 
-async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
+async function post<TReq, TRes>(path: string, body: TReq, signal?: AbortSignal): Promise<TRes> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+  if (!res.ok) throw await ApiError.fromResponse(res);
   return res.json() as Promise<TRes>;
 }
 
@@ -64,13 +65,13 @@ export function sendTurn(input: {
   messageId: string;
   playerText: string;
   requestId?: string;
-}) {
+}, signal?: AbortSignal) {
   return post<TurnRequest, TurnResponse>('/negotiation/turn', {
     sessionId: input.sessionId,
     messageId: input.messageId,
     playerText: input.playerText,
     requestId: input.requestId ?? newRequestId(),
-  });
+  }, signal);
 }
 
 // 종료 응답에 successText·failureText·limitText·hintText·rewards·styleReport가 함께 실린다.
@@ -86,13 +87,20 @@ function mockStages(): StagesResponse {
 }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number) { super(`서버 요청 실패: ${status}`); }
+  constructor(public readonly status: number, public readonly detail = '') { super(`서버 요청 실패: ${status} ${detail}`); }
+  get missingSession(): boolean { return this.status === 404 && /session[ _]not[ _]found/i.test(this.detail); }
+  get missingResultEndpoint(): boolean { return this.status === 404 && /Cannot GET|not found/i.test(this.detail) && !this.missingSession; }
+  static async fromResponse(response: Response): Promise<ApiError> {
+    const body = await response.text();
+    try { const data = JSON.parse(body); return new ApiError(response.status, String(data.error ?? data.message ?? body)); }
+    catch { return new ApiError(response.status, body); }
+  }
 }
 
 export async function getSessionResult(sessionId: string, signal?: AbortSignal): Promise<ResultResponse> {
   const res = await fetch(`${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/result`, {
     signal, cache: 'no-store',
   });
-  if (!res.ok) throw new ApiError(res.status);
+  if (!res.ok) throw await ApiError.fromResponse(res);
   return res.json() as Promise<ResultResponse>;
 }

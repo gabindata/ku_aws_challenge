@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playUiClick } from './UiFeedback';
 
 export class SettingsPanel {
   private container: Phaser.GameObjects.Container;
@@ -61,6 +62,7 @@ export class SettingsPanel {
     const bgmMinus = scene.add
       .text(width / 2 - 150, height / 2 - 90, '-', {
         fontFamily: 'YPairing',
+        fontStyle: 'bold',
         fontSize: '40px',
         color: '#ffffff',
       })
@@ -78,6 +80,7 @@ export class SettingsPanel {
     const bgmPlus = scene.add
       .text(width / 2 + 150, height / 2 - 90, '+', {
         fontFamily: 'YPairing',
+        fontStyle: 'bold',
         fontSize: '40px',
         color: '#ffffff',
       })
@@ -85,6 +88,7 @@ export class SettingsPanel {
       .setInteractive({ useHandCursor: true });
 
     bgmMinus.on('pointerdown', () => {
+      playUiClick(scene);
       bgmVolume = Math.max(0, bgmVolume - 0.1);
       
       mainBgm?.setVolume(bgmVolume);
@@ -93,6 +97,7 @@ export class SettingsPanel {
     });
       
     bgmPlus.on('pointerdown', () => {
+      playUiClick(scene);
       bgmVolume = Math.min(1, bgmVolume + 0.1);
       
       mainBgm?.setVolume(bgmVolume);
@@ -136,7 +141,8 @@ export class SettingsPanel {
         '마이크 테스트',
         {
           fontFamily: 'YPairing',
-          fontSize: '34px',
+          fontStyle: 'bold',
+          fontSize: '30px',
           color: '#ffffff',
           backgroundColor: '#2f5597',
           padding: {
@@ -158,7 +164,8 @@ export class SettingsPanel {
       'X',
       {
         fontFamily: 'YPairing',
-        fontSize: '36px',
+        fontStyle: 'bold',
+        fontSize: '32px',
         color: '#ffffff',
       }
     )
@@ -185,13 +192,12 @@ export class SettingsPanel {
     this.container.setDepth(1000);
 
     micTestButton.on('pointerdown', () => {
+      playUiClick(scene);
       console.log('마이크 테스트 클릭');
     });
 
     closeButton.on('pointerdown', () => {
-      scene.sound.play('button-click', {
-        volume: 0.5,
-      });
+      playUiClick(scene);
     
       this.close();
       onClose();

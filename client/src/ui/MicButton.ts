@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playUiClick } from './UiFeedback';
 
 /** 이미지 마이크 버튼. 입력 잠금 및 녹음 상태는 기존 협상 흐름을 따른다. */
 export class MicButton extends Phaser.GameObjects.Container {
@@ -11,9 +12,13 @@ export class MicButton extends Phaser.GameObjects.Container {
     this.icon = scene.add.image(0, -8, 'mic-button').setDisplaySize(100, 100)
       .setInteractive({ useHandCursor: true });
     this.label = scene.add.text(0, 50, '말하기', {
-      fontFamily: 'YPairing', fontSize: '23px', color: '#ffffff', stroke: '#172332', strokeThickness: 4,
+      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '23px', color: '#ffffff', stroke: '#172332', strokeThickness: 4,
     }).setOrigin(0.5, 0);
-    this.icon.on('pointerdown', () => { if (!this.isDisabled) onClick(); });
+    this.icon.on('pointerdown', () => {
+      if (this.isDisabled) return;
+      playUiClick(scene);
+      onClick();
+    });
     this.add([this.icon, this.label]);
     this.setDepth(40);
   }

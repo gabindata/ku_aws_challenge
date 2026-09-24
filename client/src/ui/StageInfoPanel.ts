@@ -56,7 +56,7 @@ export class StageInfoPanel {
         {
           fontFamily: 'YPairing',
           fontSize: '36px',
-          fontStyle: 'bold',
+          fontStyle: 'normal',
           color: '#ffffff',
         }
       )
@@ -74,6 +74,7 @@ export class StageInfoPanel {
         {
           fontFamily: 'YPairing',
           fontSize: '30px',
+          fontStyle: 'bold',
           color: '#263746',
         }
       )
@@ -215,6 +216,11 @@ export class StageInfoPanel {
   }
 
   open(): void {
+    // 확대된 월드맵에서도 화면 가운데에 원래 UI 크기로 표시한다.
+    const zoom = this.scene.cameras.main.zoom;
+    const { width, height } = this.scene.scale;
+    this.container.setScale(1 / zoom);
+    this.container.setPosition(width / 2 * (1 - 1 / zoom), height / 2 * (1 - 1 / zoom));
     this.container.setVisible(true);
   }
 

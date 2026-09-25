@@ -1,3 +1,4 @@
+import { BLOCKED_AREAS, SOURCE_MAP_WIDTH, SOURCE_MAP_HEIGHT } from '../config/townMap';
 import { StageInfoPanel } from '../ui/StageInfoPanel';
 
 import Phaser from 'phaser';
@@ -6,13 +7,7 @@ import { Player } from '../entities/Player';
 import { TimeOfDaySystem } from '../systems/TimeOfDaySystem';
 import { BackButton } from '../ui/BackButton';
 
-interface BlockedArea {
-  name: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
+
 
 interface InteractionArea {
   name: string;
@@ -23,103 +18,22 @@ interface InteractionArea {
   npcId: string;
 }
 
-const SOURCE_MAP_WIDTH = 1672;
-const SOURCE_MAP_HEIGHT = 941;
+
+
 
 // =========================
 // 충돌 영역
 // =========================
 
-const BLOCKED_AREAS: BlockedArea[] = [
-  {
-    name: 'north-west',
-    left: 0,
-    top: 0,
-    width: 302,
-    height: 358,
-  },
 
-  // 편의점 통로
-  {
-    name: 'store-back',
-    left: 302,
-    top: 0,
-    width: 70,
-    height: 245,
-  },
-
-  {
-    name: 'north-center',
-    left: 372,
-    top: 0,
-    width: 693,
-    height: 358,
-  },
-
-  {
-    name: 'north-east-center',
-    left: 1190,
-    top: 0,
-    width: 150,
-    height: 358,
-  },
-
-  {
-    name: 'house-back',
-    left: 1345,
-    top: 0,
-    width: 60,
-    height: 270,
-  },
-
-  {
-    name: 'north-east',
-    left: 1407,
-    top: 0,
-    width: 267,
-    height: 358,
-  },
-
-  // 학교 입구 주변
-  {
-    name: 'south-west-left',
-    left: 0,
-    top: 570,
-    width: 670,
-    height: 371,
-  },
-
-  {
-    name: 'school-back',
-    left: 640,
-    top: 635,
-    width: 90,
-    height: 306,
-  },
-
-  {
-    name: 'south-west-right',
-    left: 735,
-    top: 570,
-    width: 355,
-    height: 371,
-  },
-
-  {
-    name: 'south-east',
-    left: 1290,
-    top: 570,
-    width: 391,
-    height: 371,
-  },
-];
 
 // =========================
 // 건물 상호작용 영역
 // =========================
 
 const INTERACTION_AREAS: InteractionArea[] = [
-  { name: 'landlord', x: 1308, y: 387, width: 100, height: 90, npcId: 'landlord' },
+  // 원본 지도 좌표의 발 위치 기준. 집주인 영역은 현관 왼쪽까지만 허용한다.
+  { name: 'landlord', x: 1308, y: 387, width: 64, height: 100, npcId: 'landlord' },
   {
     name: 'convenience-store',
     x: 337,
@@ -141,9 +55,9 @@ const INTERACTION_AREAS: InteractionArea[] = [
   {
     name: 'house',
     x: 1373,
-    y: 340,
-    width: 100,
-    height: 100,
+    y: 355,
+    width: 64,
+    height: 110,
     npcId: 'house',
   },
 ];
@@ -161,7 +75,7 @@ export class StageSelectScene extends Phaser.Scene {
   private backButton!: BackButton;
 
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
-  private collisionDebugVisible = true;
+  private collisionDebugVisible = false;
 
   // =========================
   // 건물 상호작용
@@ -170,6 +84,7 @@ export class StageSelectScene extends Phaser.Scene {
   private interactKey!: Phaser.Input.Keyboard.Key;
 
   private nearbyNpcId: string | null = null;
+  private infoCameraFrozen = false;
 
   private enterText!: Phaser.GameObjects.Text;
 
@@ -204,6 +119,7 @@ export class StageSelectScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.interactionZones = [];
+    this.infoCameraFrozen = false;
 
   
 
@@ -328,9 +244,6 @@ export class StageSelectScene extends Phaser.Scene {
     const sy = height / SOURCE_MAP_HEIGHT;
     this.add.image(1308 * sx, 344 * sy, 'landlord-2d')
       .setDisplaySize(82 * sx, 82 * sy).setDepth(2);
-    const landlordFeet = this.add.rectangle(1308 * sx, 372 * sy, 24 * sx, 16 * sy, 0, 0);
-    this.physics.add.existing(landlordFeet, true);
-    this.physics.add.collider(this.player, landlordFeet);
     this.player.setDepth(3);
 
     // =========================
@@ -412,10 +325,15 @@ export class StageSelectScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const interactPressed = Phaser.Input.Keyboard.JustDown(this.interactKey);
     if (this.stageInfoPanel.isOpen) {
       this.player.setVelocity(0, 0);
       this.enterText.setVisible(false);
       return;
+    }
+    if (this.infoCameraFrozen) {
+      this.infoCameraFrozen = false;
+      this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     }
     this.player.update();
 
@@ -436,7 +354,15 @@ export class StageSelectScene extends Phaser.Scene {
     // =========================
 
     for (const { zone, area } of this.interactionZones) {
-      if (this.physics.overlap(this.player, zone)) {
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      // 집주인과 현관은 동일한 지도 좌표의 발 위치로 판정한다.
+      // 몸통이 옆 영역에 걸쳐도 대상이 바뀌지 않도록 영역을 분리한다.
+      const px = body.center.x / (this.scale.width / SOURCE_MAP_WIDTH);
+      const py = body.bottom / (this.scale.height / SOURCE_MAP_HEIGHT);
+      const nearby = area.npcId === 'landlord' || area.npcId === 'house'
+        ? Math.abs(px - area.x) <= area.width / 2 && Math.abs(py - area.y) <= area.height / 2
+        : this.physics.overlap(this.player, zone);
+      if (nearby) {
         this.nearbyNpcId = area.npcId;
 
         const scaleX =
@@ -462,7 +388,7 @@ export class StageSelectScene extends Phaser.Scene {
 
     if (
       this.nearbyNpcId &&
-      Phaser.Input.Keyboard.JustDown(this.interactKey)
+      interactPressed
     ) {
       switch (this.nearbyNpcId) {
         // 편의점
@@ -495,6 +421,8 @@ export class StageSelectScene extends Phaser.Scene {
         // 집주인 옆 F → 고금자 협상
         case 'landlord':
           this.player.setVelocity(0, 0);
+          this.cameras.main.stopFollow();
+          this.infoCameraFrozen = true;
           this.stageInfoPanel.open();
           break;
       }

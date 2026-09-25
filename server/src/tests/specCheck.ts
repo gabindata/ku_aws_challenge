@@ -14,6 +14,8 @@ import {
   appendPlayerTurn,
   getSession,
   markWorldStateMentioned,
+  playerTurns,
+  recordStyleSignals,
   rememberProposal,
   remainingSeconds as remainingSecondsOf,
   setAgreement,
@@ -36,6 +38,8 @@ import {
   TIMER_WARNING_SECONDS,
 } from '../data/stageSchema';
 import { buildJudgePrompt, buildJudgeSystem } from '../llm/judgePrompt';
+import { buildReportSystem, buildReportUser, describeTag } from '../llm/reportPrompt';
+import { buildReportInput } from '../services/reportInput';
 import { judgeConfig } from '../llm/config';
 import { estimateTokens } from '../services/reportInput';
 
@@ -548,6 +552,58 @@ async function worldStateOnce(): Promise<void> {
     none.ok && Object.keys(activeWorldStateReferences(stage, getSession(none.value.sessionId)!.worldStateKeys, [])).length === 0);
 }
 
+async function reportPromptHygiene(): Promise<void> {
+  // 리포트 프롬프트에 내부 식별자가 들어가면 총평에 그대로 새어 나온다.
+  // "empty_pledge 태그가 2회 잡혔습니다" 같은 문장이 실제로 나왔다.
+  const stage = getStage(3)!;
+  const s = await startNegotiation({ stageId: 3, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('리포트 프롬프트 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  const sess = getSession(sid)!;
+
+  appendNpcTurn(sid, '어떻게 치울 건가?');
+  const turn = appendPlayerTurn(sid, id('m'), '열심히 하겠습니다');
+  for (const tag of stage.styleReportConfig.allowedStageTags) {
+    recordStyleSignals(sid, {
+      formality: 'polite', directness: 'direct',
+      cushion: { used: true, expressions: ['혹시'] },
+      stageTags: [tag], evidenceTurnId: turn.id,
+    });
+  }
+
+  const prompt = buildReportSystem(stage) + '\n' + buildReportUser(buildReportInput(sess, playerTurns(sess)), stage);
+
+  // 모든 스테이지의 태그 코드가 어디에도 없어야 한다
+  const allTags = loadAllStages().flatMap((st) => st.styleReportConfig.allowedStageTags);
+  const leakedTags = allTags.filter((t) => prompt.includes(t));
+  ok('태그 코드가 프롬프트에 없음', leakedTags.length === 0, leakedTags.join(', '));
+
+  const leakedKeys = loadAllStages()
+    .flatMap((st) => st.requiredAgreementKeys)
+    .filter((k) => prompt.includes(k));
+  ok('합의 키 이름이 프롬프트에 없음', leakedKeys.length === 0, leakedKeys.join(', '));
+
+  // 태그는 빠지는 게 아니라 우리말 설명으로 들어가야 한다
+  ok('태그가 우리말 설명으로 실림',
+    stage.styleReportConfig.allowedStageTags.every((t) => {
+      const text = describeTag(t);
+      return text !== null && prompt.includes(text);
+    }));
+
+  // 설명이 없는 태그가 생기면 여기서 걸린다
+  const undescribed = allTags.filter((t) => describeTag(t) === null);
+  ok('모든 태그에 설명이 있음', undescribed.length === 0, undescribed.join(', '));
+
+  // 합의 상태는 기획서의 의도 문장으로
+  ok('합의 상태가 의도 문장으로 실림',
+    stage.requiredAgreementKeys.every((k) => prompt.includes(stage.agreementDefinitions[k].intent)));
+
+  // 말투 이름 규칙이 칭호형을 허용해야 한다
+  ok('칭호형 이름을 허용', prompt.includes('칭호형'));
+  ok('  밋밋한 예시를 반례로 제시', prompt.includes('밋밋함'));
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -604,6 +660,7 @@ async function main(): Promise<void> {
   await readyAndTimer();
   await worldStateOnce();
   await successExtras();
+  await reportPromptHygiene();
   await asyncReport();
   await idempotency();
   await privacy();

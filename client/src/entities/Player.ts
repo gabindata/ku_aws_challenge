@@ -62,7 +62,7 @@ private collisionDebug!: Phaser.GameObjects.Graphics;
     // 플레이어 충돌 영역 표시용 그래픽 생성
 this.collisionDebug = scene.add.graphics();
 
-this.collisionDebug.setDepth(9999);
+this.collisionDebug.setDepth(9999).setVisible(false);
 
     // 월드 경계 충돌
     this.setCollideWorldBounds(true);

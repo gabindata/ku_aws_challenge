@@ -599,9 +599,11 @@ async function reportPromptHygiene(): Promise<void> {
   ok('합의 상태가 의도 문장으로 실림',
     stage.requiredAgreementKeys.every((k) => prompt.includes(stage.agreementDefinitions[k].intent)));
 
-  // 말투 이름 규칙이 칭호형을 허용해야 한다
-  ok('칭호형 이름을 허용', prompt.includes('칭호형'));
-  ok('  밋밋한 예시를 반례로 제시', prompt.includes('밋밋함'));
+  // 말투 이름은 한 일의 서술이 아니라 어떤 사람이었는지의 설명이어야 한다
+  ok('이름 규칙이 유형 이름을 요구', prompt.includes('유형 이름'));
+  ok('  낱말 나열을 반례로 제시', prompt.includes('쓴 낱말을 나열한 것'));
+  ok('  밋밋한 이름을 반례로 제시', prompt.includes('밋밋하고 사람이 안 보임'));
+  ok('  인용은 짧은 설명에서', prompt.includes('그건 짧은 설명에서 다룹니다'));
 }
 
 async function idempotency(): Promise<void> {

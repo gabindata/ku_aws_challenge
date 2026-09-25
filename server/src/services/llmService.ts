@@ -217,7 +217,7 @@ async function callReportModel(input: NarrativeInput, report: ReportInput): Prom
   const raw = await callStructured({
     config,
     system: buildReportSystem(input.stage),
-    userContent: buildReportUser(report),
+    userContent: buildReportUser(report, input.stage),
     schema: narrativeSchema,
     name: 'style_narrative',
   });

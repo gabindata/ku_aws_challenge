@@ -46,7 +46,7 @@ export class SettingsPanel {
     panel.append(close, title);
     const rows: [keyof GameSettings, string, number, number][] = [
       ['voice', 'NPC 음성', 0, 100], ['bgm', '배경음악', 0, 100],
-      ['ui', '버튼 소리', 0, 100], ['brightness', '화면 밝기', 50, 150],
+      ['ui', 'UI 소리', 0, 100], ['brightness', '화면 밝기', 50, 100],
     ];
     for (const [key, label, min, max] of rows) {
       const row = document.createElement('label'); row.className = 'settings-row';

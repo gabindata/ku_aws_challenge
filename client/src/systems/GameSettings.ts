@@ -5,7 +5,7 @@ try {
   const saved = JSON.parse(localStorage.getItem('game-settings') ?? '{}');
   for (const key of Object.keys(defaults) as (keyof GameSettings)[]) {
     if (typeof saved[key] === 'number' && Number.isFinite(saved[key]))
-      gameSettings[key] = Math.max(key === 'brightness' ? 0.5 : 0, Math.min(key === 'brightness' ? 1.5 : 1, saved[key]));
+      gameSettings[key] = Math.max(key === 'brightness' ? 0.5 : 0, Math.min(1, saved[key]));
   }
 } catch { /* 저장소를 사용할 수 없어도 기본 설정으로 실행한다. */ }
 export function applyBrightness(): void {
@@ -18,7 +18,7 @@ export function applyBrightness(): void {
 }
 export function setGameSetting(key: keyof GameSettings, value: number): void {
   if (!Number.isFinite(value)) return;
-  gameSettings[key] = Math.max(key === 'brightness' ? 0.5 : 0, Math.min(key === 'brightness' ? 1.5 : 1, value));
+  gameSettings[key] = Math.max(key === 'brightness' ? 0.5 : 0, Math.min(1, value));
   try { localStorage.setItem('game-settings', JSON.stringify(gameSettings)); } catch { /* 세션에는 적용 */ }
   applyBrightness();
   window.dispatchEvent(new Event('game-settings-change'));

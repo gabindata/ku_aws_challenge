@@ -26,7 +26,7 @@ export class ResultReportView {
       if (view.hintText) hero.append(el('p',view.hintText));
     }
     const img = el('img','','mascot');
-    img.src = `${import.meta.env.BASE_URL}assets/images/ui/report-${success ? 'success' : 'failure'}.svg`;
+    img.src = `${import.meta.env.BASE_URL}assets/images/ui/report-${success ? 'success' : 'failure'}.png`;
     img.alt = success ? '기쁜 너구리' : '아쉬운 너구리'; hero.append(img);
     this.notice.setAttribute('role','status');
     const actions = el('footer','','actions');

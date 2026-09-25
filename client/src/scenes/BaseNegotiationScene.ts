@@ -1,3 +1,4 @@
+import { SettingsPanel } from '../ui/SettingsPanel';
 import { SessionResultPoller } from '../systems/SessionResultPoller';
 import { playUiClick } from '../ui/UiFeedback';
 import Phaser from 'phaser';
@@ -48,6 +49,9 @@ export class BaseNegotiationScene extends Phaser.Scene {
   private displayDeadline = 0;
   private timeoutRequest?: AbortController;
   private nextTimeoutCheck = 0;
+  private settingsPanel?: SettingsPanel;
+  private exitDialog?: HTMLElement;
+  private closeExitDialog?: () => void;
   private speaking = false;
   private recording = false;
 
@@ -58,6 +62,8 @@ export class BaseNegotiationScene extends Phaser.Scene {
   }
 
   init(data: { npcId?: string; returnTo?: ReturnLocation } = {}): void {
+    this.settingsPanel = undefined;
+    this.exitDialog = undefined;
     this.returnTo = data.returnTo;
     this.npcId = this.stage.npcId;
     this.sessionId = null;
@@ -100,7 +106,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     // =========================
 
     new BackButton(this, () => {
-      this.scene.start(this.returnTo?.scene ?? this.stage.returnScene, { returnPosition: this.returnTo?.position });
+      this.confirmExit();
     });
 
     // =========================
@@ -179,6 +185,9 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       // 이전 입장의 응답이 재입장한 화면을 변경하지 못하게 한다.
+      this.closeExitDialog?.();
+      this.exitDialog?.remove();
+      this.exitDialog = undefined;
       this.sceneGeneration += 1;
       this.sessionId = null;
       this.timeoutRequest?.abort();
@@ -189,6 +198,19 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.ttsManager.cancel();
     });
 
+    const settings = this.add.image(width - 60, 60, 'settings-button')
+      .setDisplaySize(72, 72).setDepth(100).setInteractive({ useHandCursor: true });
+    settings.on('pointerdown', () => {
+      if (this.settingsPanel || this.exitDialog || this.ended) return;
+      playUiClick(this);
+      this.voiceInput.stop(); this.recording = false;
+      this.ttsManager.cancel(); this.micButton.setRecording(false);
+      this.settingsPanel = new SettingsPanel(this, () => {
+        this.settingsPanel = undefined;
+        if (this.scene.isActive()) this.updateInputState();
+      });
+      this.updateInputState();
+    });
     void this.beginNegotiation();
   }
 
@@ -243,6 +265,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.micButton.setDisabled(true);
 
     try {
+      if (this.settingsPanel || this.exitDialog) return;
       await this.ttsManager.speak(
         text,
         this.stage.npcId
@@ -443,7 +466,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
   }
 
   private updateInputState(): void {
-    this.micButton.setDisabled(!this.sessionId || !this.serverReady || this.speaking ||
+    this.micButton.setDisabled(!!this.settingsPanel || !!this.exitDialog || !this.sessionId || !this.serverReady || this.speaking ||
       this.recording || this.ended || this.turnBusy || this.pendingTurn !== null || this.remainingSeconds <= 0);
   }
 
@@ -482,6 +505,48 @@ export class BaseNegotiationScene extends Phaser.Scene {
         this.dialogueBox.showText('협상 세션이 만료됐어요. 뒤로가기로 나간 뒤 다시 시작해 주세요.');
       }
     });
+  }
+
+  private confirmExit(): void {
+    if (this.exitDialog || this.settingsPanel) return;
+    this.voiceInput.stop(); this.recording = false;
+    this.ttsManager.cancel(); this.micButton.setRecording(false);
+    const root = document.createElement('div'); root.className = 'game-settings-overlay';
+    const panel = document.createElement('section'); panel.className = 'game-settings-panel';
+    panel.setAttribute('role', 'alertdialog'); panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', '대화 종료 확인');
+    panel.tabIndex = -1;
+    panel.classList.add('exit-confirm-panel');
+    const message = document.createElement('p'); message.textContent = '진행 중인 대화를 종료할까요?';
+    const detail = document.createElement('p'); detail.className = 'settings-status';
+    detail.textContent = '나가면 이번 대화를 이어서 진행할 수 없어요.';
+    const cancel = document.createElement('button'); cancel.className = 'exit-confirm-button'; cancel.textContent = '계속하기';
+    const leave = document.createElement('button'); leave.className = 'exit-confirm-button'; leave.textContent = '대화 종료';
+    const inputEnabled = this.input.enabled;
+    const keyboardEnabled = this.input.keyboard?.enabled;
+    this.input.enabled = false;
+    if (this.input.keyboard) this.input.keyboard.enabled = false;
+    const close = () => {
+      root.remove(); this.exitDialog = undefined; this.closeExitDialog = undefined; this.input.enabled = inputEnabled;
+      if (this.input.keyboard && keyboardEnabled !== undefined) this.input.keyboard.enabled = keyboardEnabled;
+      this.updateInputState();
+    };
+    cancel.onclick = () => { playUiClick(this); close(); };
+    leave.onclick = () => {
+      playUiClick(this); close();
+      this.scene.start(this.returnTo?.scene ?? this.stage.returnScene, { returnPosition: this.returnTo?.position });
+    };
+    root.onkeydown = event => {
+      event.stopPropagation();
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+      if (event.key === 'Tab') { event.preventDefault(); (document.activeElement === panel ? (event.shiftKey ? leave : cancel) : document.activeElement === cancel ? leave : cancel).focus(); }
+    };
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click']) root.addEventListener(type, event => event.stopPropagation());
+    const actions = document.createElement('div'); actions.className = 'exit-confirm-actions';
+    actions.append(cancel, leave);
+    panel.append(message, detail, actions); root.append(panel); document.body.append(root);
+    this.closeExitDialog = close;
+    this.exitDialog = root; this.updateInputState(); panel.focus();
   }
 
   private syncTimer(seconds: number): void {

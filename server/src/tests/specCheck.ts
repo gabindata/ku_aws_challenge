@@ -602,7 +602,8 @@ async function reportPromptHygiene(): Promise<void> {
   // 말투 이름은 한 일의 서술이 아니라 어떤 사람이었는지의 설명이어야 한다
   ok('이름 규칙이 유형 이름을 요구', prompt.includes('유형 이름'));
   ok('  낱말 나열을 반례로 제시', prompt.includes('쓴 낱말을 나열한 것'));
-  ok('  밋밋한 이름을 반례로 제시', prompt.includes('밋밋하고 사람이 안 보임'));
+  ok('  유형 이름 없는 형태를 반례로 제시', prompt.includes('유형 이름이 없고 사람이 안 보임'));
+  ok('  목록에서 고르지 말라고 지시', prompt.includes('목록에서 고르지 말고'));
   ok('  인용은 짧은 설명에서', prompt.includes('그건 짧은 설명에서 다룹니다'));
 }
 

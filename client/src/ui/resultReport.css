@@ -45,10 +45,13 @@
 .result-report .result-text {
   font-size:22px}
 .result-report .mascot {
-  width:min(300px,80%);
-  height:210px;
+  display:block;
+  width:min(630px,100%);
+  height:auto;
+  aspect-ratio:3 / 2;
   object-fit:contain;
-  margin-top:18px}
+  margin:-65px auto -30px;
+  pointer-events:none}
 .result-report .observation {
   text-align:center}
 .result-report .observation h2 {

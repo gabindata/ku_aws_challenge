@@ -161,7 +161,7 @@ export class StageSelectScene extends Phaser.Scene {
   private backButton!: BackButton;
 
   private collisionAreas: Phaser.GameObjects.Rectangle[] = [];
-  private collisionDebugVisible = false;
+  private collisionDebugVisible = true;
 
   // =========================
   // 건물 상호작용
@@ -624,8 +624,9 @@ export class StageSelectScene extends Phaser.Scene {
             width,
             height,
             0xff0000,
-            this.collisionDebugVisible ? 0.4 : 0
+            1
           )
+          .setAlpha(this.collisionDebugVisible ? 0.4 : 0)
           .setDepth(1000)
           .setName(`blocked-${area.name}`);
 

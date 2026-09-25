@@ -4,7 +4,7 @@ import type { ReturnLocation } from '../types';
 import { Player } from '../entities/Player';
 import { BackButton } from '../ui/BackButton';
 
-// 배경 비율 기준 기본 충돌 영역 [left, top, width, height]. C키로 확인한다.
+// 배경 비율 기준d 기본 충돌 영역 [left, top, width, height]. C키로 확인한다.
 const BLOCKED_AREAS = [
   [0, 0, 1, 0.07], [0, 0, 0.055, 1], [0.94, 0, 0.06, 1],
   [0, 0.86, 1, 0.14],
@@ -33,12 +33,12 @@ export class HouseScene extends Phaser.Scene {
     this.player = new Player(this, width * 0.50, height * 0.73, 'down-idle', 0.9, 450);
     const blockers = BLOCKED_AREAS.map(([x, y, w, h]) => {
       const rect = this.add.rectangle((x + w / 2) * width, (y + h / 2) * height,
-        w * width, h * height, 0xff0000, 0);
+        w * width, h * height, 0xff0000, 1).setAlpha(0.35).setDepth(1000);
       this.physics.add.existing(rect, true);
       this.physics.add.collider(this.player, rect);
       return rect;
     });
-    let debug = false;
+    let debug = true;
     const toggleDebug = () => { debug = !debug; blockers.forEach(b => b.setAlpha(debug ? 0.35 : 0)); };
     this.input.keyboard!.on('keydown-C', toggleDebug);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-C', toggleDebug));

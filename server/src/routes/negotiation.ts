@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { listStages } from '../services/npcPersonaService';
-import { getResult, processTurn, startNegotiation, type RunResult } from '../services/negotiationRunner';
+import {
+  getResult,
+  processTurn,
+  setSettingsPause,
+  startNegotiation,
+  type RunResult,
+} from '../services/negotiationRunner';
 
 /** HTTP만 다룬다. 협상 절차는 services/negotiationRunner.ts에 있다. */
 export const negotiationRouter = Router();
@@ -47,4 +53,16 @@ negotiationRouter.post('/negotiation/turn', async (req, res) => {
 // 결과 화면이 리포트를 기다릴 때, 그리고 새로고침 뒤 복구할 때 쓴다.
 negotiationRouter.get('/sessions/:sessionId/result', (req, res) => {
   send(res, getResult(req.params.sessionId));
+});
+
+// POST /api/sessions/:sessionId/pause
+// 설정창을 열 때 부른다. 남은 시간이 멈추고 새 발화를 받지 않는다 (공통규칙 §4 예외).
+negotiationRouter.post('/sessions/:sessionId/pause', (req, res) => {
+  send(res, setSettingsPause(req.params.sessionId, true));
+});
+
+// POST /api/sessions/:sessionId/resume
+// 설정창을 닫을 때 부른다. 멈춘 만큼 마감이 뒤로 밀린다.
+negotiationRouter.post('/sessions/:sessionId/resume', (req, res) => {
+  send(res, setSettingsPause(req.params.sessionId, false));
 });

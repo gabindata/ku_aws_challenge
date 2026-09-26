@@ -8,7 +8,12 @@
  */
 process.env.LLM_MODE = 'stub';
 
-import { startNegotiation, processTurn, getResult } from '../services/negotiationRunner';
+import {
+  getResult,
+  processTurn,
+  setSettingsPause,
+  startNegotiation,
+} from '../services/negotiationRunner';
 import {
   appendNpcTurn,
   appendPlayerTurn,
@@ -607,6 +612,109 @@ async function reportPromptHygiene(): Promise<void> {
   ok('  인용은 짧은 설명에서', prompt.includes('그건 짧은 설명에서 다룹니다'));
 }
 
+async function settingsPause(): Promise<void> {
+  // 공통규칙 §4 예외 — 설정창 진입·종료에 따른 일시정지·재개
+  const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('일시정지 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  const sess = getSession(sid)!;
+
+  const before = remainingSecondsOf(sess)!;
+  ok('정지 전엔 running', sess.timerStatus === 'running');
+
+  // ── 일시정지 ──
+  const paused = setSettingsPause(sid, true);
+  ok('정지 요청 성공', paused.ok);
+  ok('  timerStatus=paused', sess.timerStatus === 'paused');
+  ok('  응답의 남은 시간도 멈춤', paused.ok && paused.value.remainingSeconds === remainingSecondsOf(sess));
+
+  await new Promise((r) => setTimeout(r, 1100));
+  ok('정지 중 남은 시간이 줄지 않음', remainingSecondsOf(sess) === before, `${remainingSecondsOf(sess)} vs ${before}`);
+
+  // 정지 중에는 새 발화를 받지 않는다
+  const callsBefore = sess.llmCallCount;
+  const blocked = await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '평일 야간 가능합니다' });
+  ok('정지 중 발화는 409 SESSION_PAUSED', !blocked.ok && blocked.status === 409 && blocked.error === 'SESSION_PAUSED');
+  ok('  판정 호출을 쓰지 않음', sess.llmCallCount === callsBefore);
+  ok('  발화로 기록하지 않음', !sess.turns.some((t) => t.text === '평일 야간 가능합니다'));
+
+  // 같은 요청이 두 번 와도 어긋나지 않는다
+  const at = sess.settingsPausedAtMs;
+  setSettingsPause(sid, true);
+  ok('정지를 두 번 요청해도 시작 시각이 안 바뀜', sess.settingsPausedAtMs === at);
+
+  // ── 재개 ──
+  const resumed = setSettingsPause(sid, false);
+  ok('재개 요청 성공', resumed.ok);
+  ok('  timerStatus=running', sess.timerStatus === 'running');
+  ok('  멈춘 만큼 마감이 밀림', sess.settingsPausedTotalMs >= 1000, `${sess.settingsPausedTotalMs}ms`);
+  ok('  남은 시간이 정지 전과 같음', Math.abs((remainingSecondsOf(sess) ?? 0) - before) <= 1,
+    `${remainingSecondsOf(sess)} vs ${before}`);
+
+  setSettingsPause(sid, false);
+  ok('재개를 두 번 요청해도 마감이 더 안 밀림', sess.settingsPausedAtMs === null);
+
+  const after = await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '평일 야간 가능합니다' });
+  ok('재개 뒤에는 발화가 들어감', after.ok && sess.llmCallCount === callsBefore + 1);
+
+  // 만료 예약이 다시 걸려 있어야 한다. 안 걸면 정지 후 세션이 영원히 안 끝난다
+  ok('재개 뒤 만료 예약이 살아 있음', sess.expiryTimer !== null);
+
+  // 없는 세션
+  const gone = setSettingsPause('없는세션', true);
+  ok('없는 세션 → 404', !gone.ok && gone.status === 404);
+
+  // 워밍업 중 정지는 시계를 보정하지 않는다. 아직 흐르지 않기 때문이다
+  const warm = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (warm.ok) {
+    const wid = warm.value.sessionId;
+    const wsess = getSession(wid)!;
+    const limit = getStage(1)!.timeLimitSeconds!;
+    setSettingsPause(wid, true);
+    await new Promise((r) => setTimeout(r, 1100));
+    setSettingsPause(wid, false);
+    ok('워밍업 중 정지는 보정하지 않음', wsess.settingsPausedTotalMs === 0, `${wsess.settingsPausedTotalMs}ms`);
+    ok('  남은 시간이 제한 시간을 넘지 않음', (remainingSecondsOf(wsess) ?? 0) <= limit,
+      `${remainingSecondsOf(wsess)} > ${limit}`);
+  }
+
+  // 종료된 세션은 정지 대상이 아니다
+  exhaustCalls(sid);
+  await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '끝' });
+  const ended = setSettingsPause(sid, true);
+  ok('종료된 세션은 정지하지 않음', ended.ok && sess.settingsPausedAtMs === null);
+}
+
+async function noDoubleCount(): Promise<void> {
+  // 공통규칙 §4 예외 — LLM·서버 처리 시간 보정과 설정 정지 시간을 중복 계산하지 않는다
+  const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('중복 계산 시나리오 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  const sess = getSession(sid)!;
+
+  // 처리 중에 설정창이 열렸다 닫힌 상황을 만든다.
+  // 실시간은 흘렀지만 그 시간은 설정 정지로 이미 인정됐으므로
+  // 처리 시간으로 또 인정하면 안 된다.
+  const deadlineBefore = sess.deadlineAtMs!;
+  setSettingsPause(sid, true);
+  await new Promise((r) => setTimeout(r, 1100));
+  setSettingsPause(sid, false);
+  const afterPause = sess.deadlineAtMs!;
+  const pausedCredit = afterPause - deadlineBefore;
+  ok('정지분만큼 마감이 밀림', pausedCredit >= 1000 && pausedCredit < 2000, `${pausedCredit}ms`);
+
+  // 이제 평범한 턴을 보낸다. stub이라 처리가 즉시 끝나므로
+  // 처리 시간 보정은 최소값이어야 하고, 앞서 인정한 정지분이 다시 얹히면 안 된다.
+  const beforeTurn = sess.deadlineAtMs!;
+  await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '평일 야간 전부 가능합니다' });
+  const turnCredit = sess.deadlineAtMs! - beforeTurn;
+  // 처리 시간 보정 + TTS 정지만 인정돼야 한다. 정지분(1.1초)이 또 들어가면 이보다 커진다
+  ok('턴 보정에 정지분이 얹히지 않음', turnCredit < pausedCredit + 20_000, `${turnCredit}ms`);
+  ok('  설정 정지 누적은 그대로', sess.settingsPausedTotalMs < 2000, `${sess.settingsPausedTotalMs}ms`);
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -664,6 +772,8 @@ async function main(): Promise<void> {
   await worldStateOnce();
   await successExtras();
   await reportPromptHygiene();
+  await settingsPause();
+  await noDoubleCount();
   await asyncReport();
   await idempotency();
   await privacy();

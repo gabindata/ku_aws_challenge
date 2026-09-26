@@ -13,6 +13,9 @@ import {
   extendDeadline,
   getSession,
   incrementLlmCallCount,
+  isSettingsPaused,
+  pauseForSettings,
+  resumeFromSettings,
   isWarmingUp,
   markWorldStateMentioned,
   sessionStatus,
@@ -155,6 +158,10 @@ async function handleTurn(
   }
   beginInput(session.sessionId);
 
+  // 설정창 정지 중에는 새 발화를 받지 않는다 (공통규칙 §4 예외).
+  // 판정 호출도 쓰지 않고 기록도 남기지 않는다. 재개한 뒤 다시 보내면 된다.
+  if (isSettingsPaused(session)) return fail(409, 'SESSION_PAUSED');
+
   // 빈 STT는 합의 상태도 판정 호출도 건드리지 않는다.
   if (text === '') return ok(progressView(session, stage, 'in_progress', null, '', stage.defaultExpressionKey));
 
@@ -179,6 +186,22 @@ async function handleTurn(
   session.messages.set(input.messageId, { text, applied: null });
   const playerTurn = appendPlayerTurn(session.sessionId, input.messageId, text);
   const callCount = incrementLlmCallCount(session.sessionId);
+
+  // 설정창 정지가 처리 중에 끼면 같은 실시간이 두 번 인정된다.
+  // 정지분을 빼기 위해 처리 시작 시점의 누적값을 기억한다 (공통규칙 §4 예외).
+  const pausedAtRequestStart = session.settingsPausedTotalMs;
+
+  /**
+   * 이번 처리에 걸린 시간에서 설정창 정지분을 뺀 값.
+   * 정지 중에 재개 요청이 아직 안 온 경우까지 센다.
+   */
+  const processingMs = (): number => {
+    const openPause = session.settingsPausedAtMs === null
+      ? 0
+      : Date.now() - session.settingsPausedAtMs;
+    const settingsMs = session.settingsPausedTotalMs - pausedAtRequestStart + openPause;
+    return Math.max(0, Date.now() - receivedAtMs - settingsMs);
+  };
 
   const evaluateInput = {
     stage,
@@ -220,7 +243,7 @@ async function handleTurn(
     // 클라이언트는 같은 messageId에 새 requestId로 다시 시도한다. 사용한 호출은 되돌리지 않는다.
     console.error('[turn] LLM 실패', err);
     removeTurn(session.sessionId, playerTurn.id);
-    extendDeadline(session.sessionId, processingPauseSeconds(Date.now() - receivedAtMs) * 1000);
+    extendDeadline(session.sessionId, processingPauseSeconds(processingMs()) * 1000);
     const after = await recheckAfterProcessing(session, stage);
     return ok(after ?? progressView(session, stage, 'retry', 'system', '', stage.defaultExpressionKey));
   }
@@ -242,7 +265,7 @@ async function handleTurn(
   //    해당 발화는 대화 기록·리포트 집계에서 빠지지만 사용한 호출 수는 유지한다.
   if (fatal && stage.fatalRecovery === true) {
     removeTurn(session.sessionId, playerTurn.id);
-    extendDeadline(session.sessionId, processingPauseSeconds(Date.now() - receivedAtMs) * 1000);
+    extendDeadline(session.sessionId, processingPauseSeconds(processingMs()) * 1000);
     scheduleExpiry(session);
     const { outcome, endReason } = resolveOutcome(session, stage, { fatal: true, nowMs: Date.now() });
     const view = outcome === 'reverted'
@@ -267,7 +290,7 @@ async function handleTurn(
   if (!fatal) applyDisclosureUpdates(session, stage, llm, npcTurn);
 
   // 6번을 판단하기 전에 이번 처리의 인정 정지 시간을 마감에 먼저 반영한다.
-  const pauseMs = (processingPauseSeconds(Date.now() - receivedAtMs) + ttsPauseSeconds(npcTurn.text)) * 1000;
+  const pauseMs = (processingPauseSeconds(processingMs()) + ttsPauseSeconds(npcTurn.text)) * 1000;
   extendDeadline(session.sessionId, pauseMs);
   scheduleExpiry(session);
 
@@ -454,4 +477,28 @@ export function getResult(sessionId: string): RunResult<ResultResponse> {
     remainingSeconds: remainingSeconds(session),
     view: session.status === 'ended' ? session.endView : null,
   });
+}
+
+/**
+ * 설정창 일시정지·재개 (공통규칙 §4 예외).
+ *
+ * 남은 시간과 정지 상태는 서버가 관리한다. 클라이언트는 열렸다·닫혔다만 알린다.
+ * 같은 요청이 두 번 와도 상태가 어긋나지 않는다.
+ */
+export function setSettingsPause(
+  sessionId: string,
+  paused: boolean,
+): RunResult<ResultResponse> {
+  const session = getSession(sessionId);
+  if (!session) return fail(404, 'SESSION_NOT_FOUND');
+  // 이미 끝난 세션의 타이머는 멈출 것도 되돌릴 것도 없다.
+  if (session.status === 'ended') return getResult(sessionId);
+
+  if (paused) {
+    pauseForSettings(sessionId);
+  } else if (resumeFromSettings(sessionId)) {
+    // 마감이 뒤로 밀렸으므로 만료 예약을 다시 걸어야 한다.
+    scheduleExpiry(session);
+  }
+  return getResult(sessionId);
 }

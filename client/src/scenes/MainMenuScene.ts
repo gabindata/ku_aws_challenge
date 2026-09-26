@@ -44,10 +44,13 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 시작하기 버튼
     this.createMenuButton(width / 2, 750, '시작하기', () => {
-      const tutorialCompleted =
-        localStorage.getItem('tutorialCompleted');
+      let tutorialSeen = this.registry.get('tutorialSeen') === true;
+      try {
+        tutorialSeen ||= localStorage.getItem('tutorialSeen') === 'true'
+          || localStorage.getItem('tutorialCompleted') === 'true';
+      } catch { /* 저장 제한 시 현재 실행의 기록 사용 */ }
 
-      if (tutorialCompleted === 'true') {
+      if (tutorialSeen) {
         this.scene.start(SceneKey.StageSelect);
       } else {
         this.showTutorialRequiredPopup();

@@ -27,7 +27,7 @@ import {
   sessionStatus,
   SESSION_RETENTION_MS,
 } from '../models/session';
-import { getStage, loadAllStages } from '../services/npcPersonaService';
+import { getStage, listStages, loadAllStages } from '../services/npcPersonaService';
 import {
   applyJudgements,
   buildRewards,
@@ -43,6 +43,7 @@ import {
   TIMER_WARNING_SECONDS,
 } from '../data/stageSchema';
 import { buildJudgePrompt, buildJudgeSystem } from '../llm/judgePrompt';
+import { FATAL_TEST_PHRASE } from '../services/stubLlm';
 import { buildReportSystem, buildReportUser, describeTag } from '../llm/reportPrompt';
 import { buildReportInput } from '../services/reportInput';
 import { judgeConfig } from '../llm/config';
@@ -76,14 +77,17 @@ function exhaustCalls(sessionId: string): void {
 
 async function stageData(): Promise<void> {
   const stages = loadAllStages();
-  ok('세 스테이지 로드', stages.length === 3, `${stages.length}개`);
-  ok('stageId 순 정렬', stages.map((s) => s.stageId).join() === '1,2,3');
+  ok('네 스테이지 로드 (튜토리얼 포함)', stages.length === 4, `${stages.length}개`);
+  ok('stageId 순 정렬', stages.map((s) => s.stageId).join() === '0,1,2,3');
 
   for (const stage of stages) {
     const r = buildRewards(stage);
     // 기획 각 스테이지 §월드 상태와 퀘스트
     ok(`스테이지 ${stage.stageId} 월드 상태 키`, !!r.successState);
-    ok(`스테이지 ${stage.stageId} 완료 퀘스트`, r.completeQuests.length > 0, JSON.stringify(r.completeQuests));
+    // 튜토리얼은 할 일을 나눠주는 쪽이라 완료시킬 퀘스트가 없다
+    if (stage.stageId !== 0) {
+      ok(`스테이지 ${stage.stageId} 완료 퀘스트`, r.completeQuests.length > 0, JSON.stringify(r.completeQuests));
+    }
     ok(`스테이지 ${stage.stageId} 종료 문구 3종`, !!stage.successText && !!stage.failureText && !!stage.limitText);
     ok(`스테이지 ${stage.stageId} 힌트가 필수 키를 모두 덮음`,
       stage.requiredAgreementKeys.every((k) => !!stage.failureHints[k]));
@@ -136,6 +140,117 @@ async function persona(): Promise<void> {
   const exposed = JSON.stringify(s.value);
   ok('페르소나가 클라이언트로 안 나감',
     !/persona|neverReveal|disclosures|answerDemand|closing/.test(exposed));
+}
+
+async function tutorial(): Promise<void> {
+  // 튜토리얼 기획 §2·§4·§7 — 정식 스테이지와 다른 두 예외가 여기서 처음 쓰인다
+  const stage = getStage(0);
+  ok('튜토리얼 스테이지 로드', !!stage);
+  if (!stage) return;
+
+  ok('난이도 tutorial', stage.difficulty === 'tutorial');
+  ok('  스테이지 3과 같은 NPC', stage.npcId === getStage(3)!.npcId);
+  ok('  표정도 스테이지 3과 공유', stage.expressionKeys.join() === getStage(3)!.expressionKeys.join());
+  ok('  필수 키 2개', stage.requiredAgreementKeys.join() === 'jobSearchAgreed,contactAgreed');
+  ok('  자발 제안 키 없음',
+    stage.requiredAgreementKeys.every((k) => !stage.agreementDefinitions[k].playerMustPropose));
+  ok('  두 키 모두 맥락 동의 허용',
+    stage.requiredAgreementKeys.every((k) => stage.agreementDefinitions[k].contextConsentAllowed));
+  ok('  해금 조건 없음', (stage.unlockRequirements ?? []).length === 0);
+
+  // 튜토리얼만의 두 예외
+  ok('fatalRecovery=true (튜토리얼만)', stage.fatalRecovery === true);
+  ok('onFailureClose=restart (튜토리얼만)', stage.onFailureClose === 'restart');
+  ok('  정식 스테이지는 기본값 유지', [1, 2, 3].every((n) => {
+    const st = getStage(n)!;
+    return st.fatalRecovery !== true && (st.onFailureClose ?? 'world_map') === 'world_map';
+  }));
+
+  // 해금: 튜토리얼만 처음부터 열려 있다
+  const locked = listStages([]);
+  ok('처음엔 튜토리얼만 열림',
+    locked.filter((x) => x.unlocked).map((x) => x.stageId).join() === '0');
+  ok('  튜토리얼 완료 후 전부 열림',
+    listStages(['tutorial_completed']).every((x) => x.unlocked));
+
+  // 퀘스트가 실제로 이어지는지
+  const added = new Set(loadAllStages().flatMap((st) => st.successRewards?.addQuests ?? []));
+  ok('튜토리얼이 할 일을 나눠줌', (stage.successRewards?.addQuests ?? []).length === 5);
+  for (const n of [1, 2, 3]) {
+    const st = getStage(n)!;
+    ok(`  스테이지 ${n} 완료 퀘스트를 튜토리얼이 추가함`,
+      buildRewards(st).completeQuests.every((q) => added.has(q)),
+      buildRewards(st).completeQuests.join());
+  }
+
+  // 치명적 발화를 되돌린다 (정식 스테이지는 실패 종료)
+  const s = await startNegotiation({ stageId: 0, requestId: id('r'), worldState: [] });
+  if (!s.ok) return ok('튜토리얼 시작', false);
+  const sid = s.value.sessionId;
+  skipOpeningTts(sid);
+  const sess = getSession(sid)!;
+  ok('오프닝이 고정 첫 대사', s.value.npcReply.includes('집세는 대체 언제 낼 거야'));
+
+  await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '일주일 안에 일자리 구하겠습니다' });
+  const calls = sess.llmCallCount;
+  const signals = sess.styleSignals.length;
+
+  const mid = id('m');
+  const fatal = await processTurn({ sessionId: sid, requestId: id('r'), messageId: mid, playerText: FATAL_TEST_PHRASE });
+  ok('치명적 발화 → reverted', fatal.ok && fatal.value.outcome === 'reverted',
+    fatal.ok ? fatal.value.outcome : 'fail');
+  ok('  발화가 기록에서 빠짐', !sess.turns.some((t) => t.text === FATAL_TEST_PHRASE));
+  ok('  리포트 집계에서도 빠짐', sess.styleSignals.length === signals);
+  ok('  사용한 호출은 되돌리지 않음', sess.llmCallCount === calls + 1, `${sess.llmCallCount}`);
+  ok('  세션은 계속됨', sess.status !== 'ended');
+
+  await processTurn({ sessionId: sid, requestId: id('r'), messageId: mid, playerText: FATAL_TEST_PHRASE });
+  ok('  같은 발화 재전송으로 호출을 또 쓰지 않음', sess.llmCallCount === calls + 1);
+
+  // §9 「마지막 호출의 치명적 발화」 — 되돌리되 상한에 걸려 종료한다
+  const last = await startNegotiation({ stageId: 0, requestId: id('r'), worldState: [] });
+  if (last.ok) {
+    const lid = last.value.sessionId;
+    skipOpeningTts(lid);
+    const ls = getSession(lid)!;
+    ls.llmCallCount = MAX_LLM_CALLS_PER_SESSION - 1;
+    const turns = ls.turns.length;
+    const r = await processTurn({ sessionId: lid, requestId: id('r'), messageId: id('m'), playerText: FATAL_TEST_PHRASE });
+    ok('40번째가 치명적이면 failure/limit',
+      r.ok && r.value.outcome === 'failure' && r.value.endReason === 'limit',
+      r.ok ? `${r.value.outcome}/${r.value.endReason}` : 'fail');
+    ok('  그 발화는 기록에서 빠짐', ls.turns.length === turns);
+    ok('  호출 수는 40회 유지', ls.llmCallCount === MAX_LLM_CALLS_PER_SESSION, `${ls.llmCallCount}`);
+    ok('  실패해도 onClose=restart', r.ok && r.value.onClose === 'restart');
+  }
+
+  // §7 「failure / fatal은 발생하지 않는다」 — 시간 만료가 우선한다
+  const late = await startNegotiation({ stageId: 0, requestId: id('r'), worldState: [] });
+  if (late.ok) {
+    const nid = late.value.sessionId;
+    const ns = getSession(nid)!;
+    ns.startedAtMs = Date.now();
+    ns.deadlineAtMs = Date.now() - 1000;
+    const r = await processTurn({ sessionId: nid, requestId: id('r'), messageId: id('m'), playerText: '죄송합니다' });
+    ok('시간 만료 → failure/time', r.ok && r.value.endReason === 'time',
+      r.ok ? String(r.value.endReason) : 'fail');
+    ok('  첫 미충족 키의 힌트', r.ok && r.value.hintText === stage.failureHints.jobSearchAgreed);
+    ok('  튜토리얼에 fatal 종료는 없음', r.ok && r.value.endReason !== 'fatal');
+  }
+
+  // 성공까지
+  await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '앞으로 연락 꼭 받겠습니다' });
+  await tick();
+  const res = getResult(sid);
+  ok('두 키가 차면 성공', res.ok && res.value.view?.outcome === 'success',
+    res.ok ? String(res.value.view?.outcome) : 'fail');
+  if (res.ok && res.value.view) {
+    const v = res.value.view;
+    ok('  성공 표정 relenting', v.expressionKey === 'relenting');
+    ok('  월드 상태 tutorial_completed', v.rewards?.successState === 'tutorial_completed');
+    ok('  고정 안내문 전달 (튜토리얼만 표시)', (v.fixedTerms?.length ?? 0) === 3);
+    ok('  onClose=restart', v.onClose === 'restart');
+  }
 }
 
 async function budgets(): Promise<void> {
@@ -764,6 +879,7 @@ async function privacy(): Promise<void> {
 async function main(): Promise<void> {
   await stageData();
   await persona();
+  await tutorial();
   await budgets();
   await callCeiling();
   await selfProposal();

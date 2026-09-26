@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import type { ReturnLocation } from '../types';
 import { Player } from '../entities/Player';
-import { BackButton } from '../ui/BackButton';
 
 // 배경 비율 기준d 기본 충돌 영역 [left, top, width, height]. C키로 확인한다.
 const BLOCKED_AREAS = [
@@ -49,7 +48,6 @@ export class HouseScene extends Phaser.Scene {
       fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '26px', color: '#ffffff', backgroundColor: '#000000aa',
       padding: { x: 10, y: 6 },
     }).setOrigin(0.5).setDepth(10000).setVisible(false);
-    new BackButton(this, () => this.leaveHouse());
   }
 
   update(): void {

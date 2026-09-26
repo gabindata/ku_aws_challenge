@@ -40,6 +40,19 @@ export interface Session {
   /** startedAt + 제한 시간 + 누적 인정 정지 시간. 정지가 쌓일 때마다 뒤로 밀린다. */
   deadlineAtMs: number | null;
   pausedTotalMs: number;
+  /**
+   * 설정창 일시정지가 시작된 시각. 정지 중이 아니면 null (공통규칙 §4 예외).
+   * 정지 중에는 남은 시간을 이 시각 기준으로 얼려 보여준다.
+   */
+  settingsPausedAtMs: number | null;
+  /**
+   * 설정창 정지로 마감을 밀어준 누적 시간.
+   *
+   * LLM·서버 처리 시간 보정과 중복 계산하지 않기 위해 따로 센다.
+   * 처리 중에 설정창을 열면 같은 실시간이 두 번 인정될 수 있어서,
+   * 처리 시간을 인정할 때 이 값의 증가분을 빼야 한다.
+   */
+  settingsPausedTotalMs: number;
   /** 서버 시계로 만료를 확인하는 예약. 마감이 밀리면 갈아 끼운다. */
   expiryTimer: NodeJS.Timeout | null;
 
@@ -150,6 +163,8 @@ export function createSession(input: CreateSessionInput): Session {
     startedAtMs: null,
     deadlineAtMs: null,
     pausedTotalMs: 0,
+    settingsPausedAtMs: null,
+    settingsPausedTotalMs: 0,
     expiryTimer: null,
     llmCallCount: 0,
     repairRequestCount: 0,
@@ -358,9 +373,58 @@ export function extendDeadline(sessionId: string, pausedMs: number): void {
 
 export function remainingSeconds(session: Session): number | null {
   if (session.deadlineAtMs === null) return null;
+  // 정지 중에는 시간이 흐르지 않는다. 정지가 시작된 시각으로 얼린다.
+  const now = session.settingsPausedAtMs ?? Date.now();
   // 아직 시작 전이면 제한 시간 그대로다. 첫 대사 TTS만큼 더 크게 나가면 안 된다.
-  const from = Math.max(Date.now(), session.startedAtMs ?? 0);
+  const from = Math.max(now, session.startedAtMs ?? 0);
   return Math.max(0, Math.ceil((session.deadlineAtMs - from) / 1000));
+}
+
+/** 설정창 정지 중인가. 이때는 새 발화를 받지 않는다. */
+export function isSettingsPaused(session: Session): boolean {
+  return session.settingsPausedAtMs !== null;
+}
+
+/**
+ * 설정창 정지를 시작한다 (공통규칙 §4 예외).
+ *
+ * 이미 정지 중이면 아무것도 하지 않는다. 같은 요청이 두 번 와도 안전하다.
+ * 만료 예약을 끈다. 켜 두면 정지 중에 마감이 지나 세션이 끝나 버린다.
+ */
+export function pauseForSettings(sessionId: string): boolean {
+  const session = requireSession(sessionId);
+  if (session.status === 'ended' || session.timerStatus === 'disabled') return false;
+  if (session.settingsPausedAtMs !== null) return true;
+
+  session.settingsPausedAtMs = Date.now();
+  session.timerStatus = 'paused';
+  if (session.expiryTimer) clearTimeout(session.expiryTimer);
+  session.expiryTimer = null;
+  return true;
+}
+
+/**
+ * 설정창 정지를 끝내고 멈춘 만큼 마감을 뒤로 민다.
+ *
+ * 만료 예약은 호출부가 갱신한다. 마감이 바뀌었으므로 반드시 다시 걸어야 한다.
+ */
+export function resumeFromSettings(sessionId: string): boolean {
+  const session = requireSession(sessionId);
+  if (session.settingsPausedAtMs === null) return false;
+
+  // 첫 대사 TTS가 흐르는 동안은 시계가 아직 시작하지 않았다.
+  // 그 구간까지 보정해 주면 남은 시간이 제한 시간보다 커진다.
+  const clockStart = Math.max(session.settingsPausedAtMs, session.startedAtMs ?? 0);
+  const pausedMs = Math.max(0, Date.now() - clockStart);
+  session.settingsPausedAtMs = null;
+  if (session.status !== 'ended' && session.timerStatus !== 'disabled') {
+    session.timerStatus = 'running';
+  }
+  if (pausedMs > 0) {
+    session.settingsPausedTotalMs += pausedMs;
+    extendDeadline(sessionId, pausedMs);
+  }
+  return true;
 }
 
 /**

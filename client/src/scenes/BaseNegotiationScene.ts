@@ -209,7 +209,9 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.ttsManager.cancel();
     });
 
-    const openSettings = () => {
+    const settings = this.add.image(width - 60, 60, 'settings-button')
+      .setDisplaySize(72, 72).setDepth(100).setInteractive({ useHandCursor: true });
+    settings.on('pointerdown', () => {
       if (this.settingsPanel || this.exitDialog || this.ended) return;
       playUiClick(this);
       this.voiceInput.stop(); this.recording = false;
@@ -223,9 +225,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.updateInputState();
       // 설정창을 보는 동안 남은 시간이 흐르면 안 된다 (공통규칙 §4 예외).
       void this.setServerPause(true);
-    };
-    this.events.on('open-settings', openSettings);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off('open-settings', openSettings));
+    });
     void this.beginNegotiation();
   }
 
@@ -664,10 +664,6 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.ttsManager.cancel();
     this.retryButton.setVisible(false);
     this.updateInputState();
-    if (this.stage.stageId === 0) {
-      this.scene.start(SceneKey.Tutorial, { finishedNegotiation: true });
-      return;
-    }
     this.scene.start(SceneKey.Result, { sessionId: this.sessionId, view: response, stageId: this.stage.stageId, returnTo: this.returnTo });
   }
 }

@@ -9,7 +9,7 @@
 
 import type { StyleReport, StyleSignals } from './styleReportTypes';
 
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Difficulty = 'tutorial' | 'easy' | 'normal' | 'hard';
 export type Speaker = 'player' | 'npc';
 
 /**

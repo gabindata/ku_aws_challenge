@@ -377,12 +377,20 @@ export class DepartmentOfficeScene extends Phaser.Scene {
     // =========================
 
     this.stageInfoPanel = new StageInfoPanel(this, {
-      stageTitle: 'STAGE 2',
+      stageTitle: '스테이지 2 · 학과 사무실',
       npcName: '한조교',
+      description: `난이도: Normal
 
-      description:
-        '학과 사무실에서 한조교와 마주쳤습니다.\n' +
-        '대화를 통해 갈등을 해결해 보세요.',
+배경
+복학 신청 기한이 3일 지났고 포털 신청 메뉴도 닫혔다. 일반휴학 4년이 이번 학기로 만료되어 더 미룰 수 없다.
+
+이번 목표
+한조교에게 기한이 지난 복학 신청을 검토받을 방법을 알아보자.
+
+공개 조건
+• 복학 신청 기한이 3일 지났다.
+• 포털 휴·복학 신청 메뉴는 닫혔다.
+• 원칙적으로 이번 학기 복학은 불가능하다.`,
 
       onStart: () => {
         this.scene.start(SceneKey.Negotiation2, {

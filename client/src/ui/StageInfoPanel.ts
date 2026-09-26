@@ -20,8 +20,8 @@ export class StageInfoPanel {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    const panelWidth = Math.min(width * 0.75, 760);
-    const panelHeight = Math.min(height * 0.7, 480);
+    const panelWidth = Math.min(width * 0.88, 1100);
+    const panelHeight = Math.min(height * 0.88, 900);
 
     // =========================
     // 정보창 바깥쪽 어두운 배경
@@ -52,7 +52,7 @@ export class StageInfoPanel {
     const title = scene.add
       .text(
         centerX,
-        centerY - panelHeight / 2 + 55,
+        centerY - panelHeight / 2 + panelHeight * 0.105,
         config.stageTitle,
         {
           fontFamily: 'YPairing',
@@ -70,13 +70,13 @@ export class StageInfoPanel {
     const npcName = scene.add
       .text(
         centerX,
-        centerY - 75,
+        centerY - panelHeight / 2 + panelHeight * 0.175,
         config.npcName,
         {
           fontFamily: 'YPairing',
-          fontSize: '30px',
+          fontSize: '36px',
           fontStyle: 'bold',
-          color: '#263746',
+          color: '#ffe6a3',
         }
       )
       .setOrigin(0.5);
@@ -88,20 +88,27 @@ export class StageInfoPanel {
     const description = scene.add
       .text(
         centerX,
-        centerY + 20,
+        centerY - panelHeight / 2 + panelHeight * 0.265,
         config.description,
         {
           fontFamily: 'YPairing',
-          fontSize: '24px',
+          fontSize: '28px',
           color: '#263746',
           align: 'center',
           wordWrap: {
-            width: panelWidth - 100,
+            width: panelWidth - 120,
           },
-          lineSpacing: 12,
+          lineSpacing: 2,
         }
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
+
+    // 모든 본문이 하단 버튼 위에 들어오도록 긴 줄까지 실제 높이로 확인한다.
+    const textBottom = centerY + panelHeight / 2 - 165;
+    let bodyFontSize = 28;
+    while (description.y + description.height > textBottom && bodyFontSize > 16) {
+      description.setFontSize(--bodyFontSize);
+    }
 
     // =========================
     // 하단 버튼
@@ -109,7 +116,7 @@ export class StageInfoPanel {
     // =========================
 
     const buttonY =
-      centerY + panelHeight / 2 - 70;
+      centerY + panelHeight / 2 - 110;
 
     const exitButtonX = centerX - 185;
     const startButtonX = centerX + 185;
@@ -215,6 +222,12 @@ export class StageInfoPanel {
     });
 
     return [button, label];
+  }
+
+  useUiCamera(camera: Phaser.Cameras.Scene2D.Camera): void {
+    for (const other of this.scene.cameras.cameras) {
+      if (other !== camera) other.ignore(this.container);
+    }
   }
 
   open(): void {

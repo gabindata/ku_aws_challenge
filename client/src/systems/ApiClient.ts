@@ -104,3 +104,22 @@ export async function getSessionResult(sessionId: string, signal?: AbortSignal):
   if (!res.ok) throw await ApiError.fromResponse(res);
   return res.json() as Promise<ResultResponse>;
 }
+
+/**
+ * 설정창 일시정지·재개 (공통규칙 §4 예외).
+ *
+ * 서버가 남은 시간과 정지 상태를 관리한다. 여기서는 열렸다·닫혔다만 알리고
+ * 돌아온 remainingSeconds로 표시를 맞춘다.
+ * 두 번 보내도 안전하므로 실패하면 그냥 다시 부르면 된다.
+ */
+async function setPause(sessionId: string, paused: boolean): Promise<ResultResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/${paused ? 'pause' : 'resume'}`,
+    { method: 'POST', cache: 'no-store' },
+  );
+  if (!res.ok) throw await ApiError.fromResponse(res);
+  return res.json() as Promise<ResultResponse>;
+}
+
+export const pauseSession = (sessionId: string) => setPause(sessionId, true);
+export const resumeSession = (sessionId: string) => setPause(sessionId, false);

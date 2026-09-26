@@ -10,7 +10,15 @@ import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
 import { TTSManager } from '../systems/TTSManager';
 import { BackButton } from '../ui/BackButton';
-import { ApiError, startNegotiation, sendTurn, newMessageId, newRequestId } from '../systems/ApiClient';
+import {
+  ApiError,
+  newMessageId,
+  newRequestId,
+  pauseSession,
+  resumeSession,
+  sendTurn,
+  startNegotiation,
+} from '../systems/ApiClient';
 import type { TurnRequest, TurnResponse } from '../types';
 import { AgreementMemoPanel } from '../ui/AgreementMemoPanel';
 import { NpcExpressionController, npcExpressionTexture } from '../systems/NpcExpressionController';
@@ -50,6 +58,8 @@ export class BaseNegotiationScene extends Phaser.Scene {
   private timeoutRequest?: AbortController;
   private nextTimeoutCheck = 0;
   private settingsPanel?: SettingsPanel;
+  /** 설정창 정지 중인가. 서버가 시간을 멈춘 동안 로컬 표시도 멈춘다 */
+  private paused = false;
   private exitDialog?: HTMLElement;
   private closeExitDialog?: () => void;
   private speaking = false;
@@ -63,6 +73,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   init(data: { npcId?: string; returnTo?: ReturnLocation } = {}): void {
     this.settingsPanel = undefined;
+    this.paused = false;
     this.exitDialog = undefined;
     this.returnTo = data.returnTo;
     this.npcId = this.stage.npcId;
@@ -208,8 +219,12 @@ export class BaseNegotiationScene extends Phaser.Scene {
       this.settingsPanel = new SettingsPanel(this, () => {
         this.settingsPanel = undefined;
         if (this.scene.isActive()) this.updateInputState();
+        // 닫히면 서버 시간이 다시 흐른다. 응답으로 표시를 맞춘다.
+        void this.setServerPause(false);
       });
       this.updateInputState();
+      // 설정창을 보는 동안 남은 시간이 흐르면 안 된다 (공통규칙 §4 예외).
+      void this.setServerPause(true);
     });
     void this.beginNegotiation();
   }
@@ -549,6 +564,31 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.exitDialog = root; this.updateInputState(); panel.focus();
   }
 
+  /**
+   * 서버에 정지·재개를 알리고 돌아온 남은 시간으로 표시를 맞춘다.
+   *
+   * 실패하면 로컬 정지를 풀어 시간이 계속 흐르게 둔다. 서버가 멈추지 않았는데
+   * 화면만 멈춰 있으면 플레이어가 남은 시간을 잘못 믿게 된다.
+   */
+  private async setServerPause(paused: boolean): Promise<void> {
+    if (!this.sessionId || this.ended) return;
+    const generation = this.sceneGeneration;
+    this.paused = paused;
+    try {
+      const result = paused
+        ? await pauseSession(this.sessionId)
+        : await resumeSession(this.sessionId);
+      if (generation !== this.sceneGeneration) return;
+      if (result.remainingSeconds !== null) this.syncTimer(result.remainingSeconds);
+      // 서버가 이미 끝낸 세션이면 결과 화면으로 넘긴다.
+      if (result.sessionStatus === 'ended' && result.view) this.finishNegotiation(result.view);
+    } catch (error) {
+      if (generation !== this.sceneGeneration) return;
+      console.error(paused ? '타이머 정지 실패:' : '타이머 재개 실패:', error);
+      this.paused = false;
+    }
+  }
+
   private syncTimer(seconds: number): void {
     this.displayDeadline = performance.now() + Math.max(0, seconds) * 1000;
     this.remainingSeconds = Math.min(600, Math.max(0, seconds));
@@ -557,6 +597,11 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   update(): void {
     if (!this.legacyResultApi || this.ended || !this.displayDeadline) return;
+    // 서버가 멈춘 동안에는 표시도 멈춘다. 재개하면 응답으로 다시 맞춰진다.
+    if (this.paused) {
+      this.displayDeadline = performance.now() + this.remainingSeconds * 1000;
+      return;
+    }
     this.remainingSeconds = Math.min(600, Math.max(0, Math.ceil((this.displayDeadline - performance.now()) / 1000)));
     this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
     if (this.remainingSeconds <= 0 && !this.turnBusy && !this.timeoutRequest && performance.now() >= this.nextTimeoutCheck) {

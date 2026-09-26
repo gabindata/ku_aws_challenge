@@ -1,3 +1,4 @@
+import { TutorialNegotiationScene } from '../scenes/TutorialNegotiationScene';
 import { HouseScene } from '../scenes/HouseScene';
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
@@ -48,6 +49,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     PreloadScene,
     MainMenuScene,
     TutorialScene,
+    TutorialNegotiationScene,
     StageSelectScene,
     NegotiationScene1,
     NegotiationScene2,

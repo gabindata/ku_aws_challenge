@@ -293,11 +293,20 @@ export class ConvenienceStoreScene extends Phaser.Scene {
     // =========================
 
     this.stageInfoPanel = new StageInfoPanel(this, {
-      stageTitle: 'STAGE 1',
+      stageTitle: '스테이지 1 · 편의점',
       npcName: '양점장',
-      description:
-        '편의점 아르바이트를 시작하기 위해\n' +
-        '양점장과 대화하고 협상을 진행하세요.',
+      description: `난이도: Easy
+
+배경
+집주인에게 일주일의 유예를 얻었지만 수입이 필요하다. 편의점 구인 전단지를 보고 경력 없이 면접을 보러 왔다.
+
+이번 목표
+양점장과 근무 조건을 의논해 아르바이트를 구하자.
+
+공개 조건
+• 경력자 우대 · 평일 야간 근무자 모집이라고 전단지에 쓰여 있다.
+• 법정 시급 및 야간수당이 적용된다.
+• 자세한 일정은 협의를 해야 한다.`,
 
       onStart: () => {
         this.scene.start(SceneKey.Negotiation1, {

@@ -298,9 +298,20 @@ export class StageSelectScene extends Phaser.Scene {
     );
 
     this.stageInfoPanel = new StageInfoPanel(this, {
-      stageTitle: 'STAGE 3',
+      stageTitle: '스테이지 3 · 원룸 현관',
       npcName: '고금자',
-      description: '집주인 고금자와 대화하고 협상을 진행하세요.',
+      description: `난이도: Hard
+
+배경
+며칠 뒤 집주인이 다시 찾아왔다. 이번 용건은 집세가 아니라 더러운 방 상태이다.
+
+이번 목표
+직접 방을 치우는 방향으로 협의해 청소업체 투입을 막자.
+
+공개 조건
+• 이번 대화의 용건은 월세가 아니라 더러운 방 상태다.
+• 청소업체를 부르고 비용을 보증금에서 차감하겠다는 통보를 받았다.`,
+
       onStart: () => {
         this.scene.start(SceneKey.Negotiation3, { npcId: 'landlord', returnTo: {
           scene: SceneKey.StageSelect,

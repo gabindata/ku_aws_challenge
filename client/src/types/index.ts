@@ -9,6 +9,7 @@ export const SceneKey = {
   MainMenu: 'MainMenuScene',
   Tutorial: 'TutorialScene',
   StageSelect: 'StageSelectScene',
+  TutorialNegotiation: 'TutorialNegotiationScene',
   Negotiation1: 'NegotiationScene1',
   Negotiation2: 'NegotiationScene2',
   Negotiation3: 'NegotiationScene3',

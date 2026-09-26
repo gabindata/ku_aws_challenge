@@ -1,13 +1,11 @@
 import { gameSettings, applyBrightness } from '../systems/GameSettings';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
-import { SettingsPanel } from '../ui/SettingsPanel';
 import { playUiClick } from '../ui/UiFeedback';
 
 /** 스테이지 선택. GET /api/stages 결과를 난이도 순으로 나열한다. */
 /**홈 화면 */
 export class MainMenuScene extends Phaser.Scene {
-  private settingsPanel?: SettingsPanel;
 
   constructor() {
     super(SceneKey.MainMenu);
@@ -38,12 +36,12 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     // 튜토리얼 버튼
-    this.createMenuButton(width / 2, 630, '튜토리얼', () => {
+    this.createMenuButton(width / 2, 690, '튜토리얼', () => {
       this.scene.start(SceneKey.Tutorial);
     });
 
     // 시작하기 버튼
-    this.createMenuButton(width / 2, 750, '시작하기', () => {
+    this.createMenuButton(width / 2, 810, '시작하기', () => {
       let tutorialSeen = this.registry.get('tutorialSeen') === true;
       try {
         tutorialSeen ||= localStorage.getItem('tutorialSeen') === 'true'
@@ -57,19 +55,7 @@ export class MainMenuScene extends Phaser.Scene {
       }
     });
 
-    // 설정 버튼
-    const settings = this.add.image(width / 2, 900, 'settings-button')
-      .setDisplaySize(100, 100).setInteractive({ useHandCursor: true });
-    settings.on('pointerover', () => settings.setTint(0xbbeeff));
-    settings.on('pointerout', () => settings.clearTint());
-    settings.on('pointerdown', () => {
-      playUiClick(this);
-      if (!this.settingsPanel) {
-        this.settingsPanel = new SettingsPanel(this, () => {
-          this.settingsPanel = undefined;
-        });
-      }
-    });
+
   }
 
 

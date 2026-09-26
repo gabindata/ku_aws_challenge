@@ -207,6 +207,37 @@ async function tutorial(): Promise<void> {
   await processTurn({ sessionId: sid, requestId: id('r'), messageId: mid, playerText: FATAL_TEST_PHRASE });
   ok('  같은 발화 재전송으로 호출을 또 쓰지 않음', sess.llmCallCount === calls + 1);
 
+  // §9 「마지막 호출의 치명적 발화」 — 되돌리되 상한에 걸려 종료한다
+  const last = await startNegotiation({ stageId: 0, requestId: id('r'), worldState: [] });
+  if (last.ok) {
+    const lid = last.value.sessionId;
+    skipOpeningTts(lid);
+    const ls = getSession(lid)!;
+    ls.llmCallCount = MAX_LLM_CALLS_PER_SESSION - 1;
+    const turns = ls.turns.length;
+    const r = await processTurn({ sessionId: lid, requestId: id('r'), messageId: id('m'), playerText: FATAL_TEST_PHRASE });
+    ok('40번째가 치명적이면 failure/limit',
+      r.ok && r.value.outcome === 'failure' && r.value.endReason === 'limit',
+      r.ok ? `${r.value.outcome}/${r.value.endReason}` : 'fail');
+    ok('  그 발화는 기록에서 빠짐', ls.turns.length === turns);
+    ok('  호출 수는 40회 유지', ls.llmCallCount === MAX_LLM_CALLS_PER_SESSION, `${ls.llmCallCount}`);
+    ok('  실패해도 onClose=restart', r.ok && r.value.onClose === 'restart');
+  }
+
+  // §7 「failure / fatal은 발생하지 않는다」 — 시간 만료가 우선한다
+  const late = await startNegotiation({ stageId: 0, requestId: id('r'), worldState: [] });
+  if (late.ok) {
+    const nid = late.value.sessionId;
+    const ns = getSession(nid)!;
+    ns.startedAtMs = Date.now();
+    ns.deadlineAtMs = Date.now() - 1000;
+    const r = await processTurn({ sessionId: nid, requestId: id('r'), messageId: id('m'), playerText: '죄송합니다' });
+    ok('시간 만료 → failure/time', r.ok && r.value.endReason === 'time',
+      r.ok ? String(r.value.endReason) : 'fail');
+    ok('  첫 미충족 키의 힌트', r.ok && r.value.hintText === stage.failureHints.jobSearchAgreed);
+    ok('  튜토리얼에 fatal 종료는 없음', r.ok && r.value.endReason !== 'fatal');
+  }
+
   // 성공까지
   await processTurn({ sessionId: sid, requestId: id('r'), messageId: id('m'), playerText: '앞으로 연락 꼭 받겠습니다' });
   await tick();

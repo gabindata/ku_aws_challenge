@@ -25,7 +25,8 @@ private collisionDebug!: Phaser.GameObjects.Graphics;
   // 사람 캐릭터인지 확인
   private readonly isHumanPlayer: boolean;
 
-  // WASD 키
+  // WASD 및 방향키
+  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys: {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
@@ -62,13 +63,15 @@ private collisionDebug!: Phaser.GameObjects.Graphics;
     // 플레이어 충돌 영역 표시용 그래픽 생성
 this.collisionDebug = scene.add.graphics();
 
-this.collisionDebug.setDepth(9999);
+this.collisionDebug.setDepth(9999).setVisible(false);
 
     // 월드 경계 충돌
     this.setCollideWorldBounds(true);
 
     // 캐릭터 깊이
     this.setDepth(0);
+
+    this.cursors = scene.input.keyboard!.createCursorKeys();
 
     // WASD 키 등록
     this.keys = scene.input.keyboard!.addKeys(
@@ -97,12 +100,12 @@ this.collisionDebug.setDepth(9999);
     // 좌우 이동
     // =========================
 
-    if (this.keys.A.isDown) {
+    if (this.keys.A.isDown || this.cursors.left.isDown) {
       this.setVelocityX(-this.speed);
       movingDirection = 'left';
     }
 
-    if (this.keys.D.isDown) {
+    if (this.keys.D.isDown || this.cursors.right.isDown) {
       this.setVelocityX(this.speed);
       movingDirection = 'right';
     }
@@ -111,12 +114,12 @@ this.collisionDebug.setDepth(9999);
     // 상하 이동
     // =========================
 
-    if (this.keys.W.isDown) {
+    if (this.keys.W.isDown || this.cursors.up.isDown) {
       this.setVelocityY(-this.speed);
       movingDirection = 'up';
     }
 
-    if (this.keys.S.isDown) {
+    if (this.keys.S.isDown || this.cursors.down.isDown) {
       this.setVelocityY(this.speed);
       movingDirection = 'down';
     }

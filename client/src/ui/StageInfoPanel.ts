@@ -150,7 +150,8 @@ export class StageInfoPanel {
 
     this.container
       .setDepth(20000)
-      .setScrollFactor(0)
+      // 컨테이너와 자식 버튼 모두 동일한 월드 좌표로 렌더링·입력을 처리한다.
+      .setScrollFactor(1, 1, true)
       .setVisible(false);
   }
 
@@ -219,9 +220,9 @@ export class StageInfoPanel {
   open(): void {
     // 확대된 월드맵에서도 화면 가운데에 원래 UI 크기로 표시한다.
     const zoom = this.scene.cameras.main.zoom;
-    const { width, height } = this.scene.scale;
+    const origin = this.scene.cameras.main.getWorldPoint(0, 0);
     this.container.setScale(1 / zoom);
-    this.container.setPosition(width / 2 * (1 - 1 / zoom), height / 2 * (1 - 1 / zoom));
+    this.container.setPosition(origin.x, origin.y);
     this.container.setVisible(true);
   }
 

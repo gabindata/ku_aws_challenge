@@ -27,14 +27,6 @@ export class MainMenuScene extends Phaser.Scene {
 
     background.setDisplaySize(width, height);
 
-    //배경 bgm
-    if (!this.sound.get('main-bgm')) {
-      this.sound.play('main-bgm', {
-        loop: true,
-        volume: gameSettings.bgm,
-      });
-    }
-
     // 튜토리얼 버튼
     this.createMenuButton(width / 2, 690, '튜토리얼', () => {
       this.scene.start(SceneKey.Tutorial);

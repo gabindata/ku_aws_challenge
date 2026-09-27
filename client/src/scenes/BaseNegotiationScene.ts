@@ -394,7 +394,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
    * ↓
    * DialogueBox
    * ↓
-   * Supertonic TTS
+   * ElevenLabs TTS (서버 경유, 실패 시 브라우저 음성)
    */
   private async handlePlayerUtterance(
     playerText: string

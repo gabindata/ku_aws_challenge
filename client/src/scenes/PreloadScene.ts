@@ -184,7 +184,7 @@ export class PreloadScene extends Phaser.Scene {
 
     this.load.audio(
       'main-bgm',
-      '/assets/audio/main_bgm.mp3'
+      '/assets/audio/Title&Main.mp3'
     );
 
     this.load.audio(
@@ -210,6 +210,8 @@ export class PreloadScene extends Phaser.Scene {
       'stage-select-evening',
       '/assets/images/stage-selection/tutorial-map-evening.png'
     );
+    this.load.audio('tutorial-bgm', '/assets/audio/Tutorial.mp3');
+    this.load.audio('stage-bgm', '/assets/audio/Stage.mp3');
   }
 
   create(): void {

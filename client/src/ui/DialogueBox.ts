@@ -13,7 +13,8 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     x: number,
     y: number,
     width: number,
-    npcName: string
+    npcName: string,
+    boxHeight = 170
   ) {
     super(scene, x, y);
 
@@ -22,13 +23,13 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     this.npcName = npcName;
 
     // 대화창 배경
-    this.box = scene.add.image(0, 0, 'dialogue-box').setDisplaySize(width, 170);
-    const nameplate = scene.add.image(-width / 2 + 140, -100, 'dialogue-nameplate').setDisplaySize(250, 80);
+    this.box = scene.add.image(0, 0, 'dialogue-box').setDisplaySize(width, boxHeight);
+    const nameplate = scene.add.image(-width / 2 + 140, -boxHeight / 2 - 15, 'dialogue-nameplate').setDisplaySize(250, 80);
 
     // 화자 이름
     this.speakerText = scene.add.text(
       -width / 2 + 45,
-      -117,
+      -boxHeight / 2 - 32,
       this.npcName,
       {
         fontFamily: 'Galmuri11',
@@ -41,7 +42,7 @@ export class DialogueBox extends Phaser.GameObjects.Container {
     // 대사 내용
     this.dialogueText = scene.add.text(
       -width / 2 + 40,
-      -20,
+      -boxHeight / 2 + 65,
       '',
       {
         fontFamily: 'Galmuri11',

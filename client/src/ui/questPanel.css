@@ -1,0 +1,14 @@
+.quest-panel { position:fixed; z-index:1000; width:360px; box-sizing:border-box; transform-origin:top left; color:#f4f5ff; background:rgba(12,25,55,.94); border:3px solid #7b8ce4; border-radius:12px; box-shadow:0 4px 0 #473484; font:22px/1.6 Galmuri11,sans-serif; }
+.quest-panel > button { display:block; width:100%; padding:15px 18px; text-align:left; border:0; background:transparent; color:#ffe6a3; cursor:pointer; font:bold 24px Galmuri11,sans-serif; }
+.quest-panel-body { padding:0 18px 16px; max-height:620px; overflow:auto; }
+.quest-panel ul { list-style:none; padding:0; margin:0; }
+.quest-panel li { padding:10px 0; overflow-wrap:anywhere; border-bottom:1px solid #ffffff20; }
+.quest-panel p { margin:8px 0; color:#ced7ed; }
+.quest-panel details { margin-top:18px; }
+.quest-panel summary { cursor:pointer; color:#b9d6cb; }
+.quest-panel .quest-done { color:#a9c9b8; }
+.quest-panel button:focus-visible, .quest-panel summary:focus-visible { outline:2px solid #ffe6a3; outline-offset:-3px; }
+
+.quest-panel .quest-item { display:flex; align-items:flex-start; gap:12px; }
+.quest-checkbox { flex:0 0 22px; width:22px; height:22px; margin-top:6px; border:2px solid #c5d0ed; border-radius:3px; display:flex; align-items:center; justify-content:center; font:bold 20px/1 Galmuri11,sans-serif; }
+.quest-done .quest-checkbox { color:#b7efc5; border-color:#91c6a1; background:#203e38; }

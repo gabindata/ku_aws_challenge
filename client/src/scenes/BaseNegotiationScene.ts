@@ -143,9 +143,10 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.dialogueBox = new DialogueBox(
       this,
       width / 2,
-      height * 0.72,
+      height * 0.72 + 25,
       width * 0.75,
-      this.stage.npcName
+      this.stage.npcName,
+      220
     );
 
     // =========================
@@ -666,13 +667,6 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.retryButton.setVisible(false);
     this.updateInputState();
     if (response.outcome === 'success' && response.rewards) saveRewards(response.rewards);
-    if (this.stage.stageId === 0 && response.outcome === 'success') {
-      this.scene.start(SceneKey.Tutorial, {
-        finishedNegotiation: true,
-        completionLines: [response.successText, ...(response.fixedTerms ?? [])].filter(Boolean),
-      });
-      return;
-    }
     this.scene.start(SceneKey.Result, { sessionId: this.sessionId, view: response, stageId: this.stage.stageId, returnTo: this.returnTo });
   }
 }

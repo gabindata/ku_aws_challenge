@@ -1,6 +1,7 @@
 import type { ClientNegotiationView } from '../types';
 import './resultReport.css';
-const AXES = [['formality','발화 격식','일상적','격식적'],['directness','직접성','암시적','직접적'],['cushion','쿠션 표현','적게 사용','많이 사용'],['length','발화 길이','짧게','길게']] as const;
+import { STYLE_AXIS_LABELS, MIN_AXIS_SAMPLE, INSUFFICIENT_AXIS_NOTE } from '../../../shared/types/styleReportTypes';
+const AXES = ['formality', 'directness', 'cushion', 'length'] as const;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = '') {
   const n = document.createElement(tag); n.textContent = text; n.className = cls; return n;
 }
@@ -14,12 +15,18 @@ export class ResultReportView {
     this.root.tabIndex = -1;
     this.root.setAttribute('aria-label','협상 결과 리포트');
     const page = el('div','','report-page');
-    page.append(el('p',`STAGE ${stageId} · 대화 기록`,'eyebrow'));
+    page.append(el('p',stageId === 0 ? '튜토리얼 · 대화 기록' : `STAGE ${stageId} · 대화 기록`,'eyebrow'));
     const hero = el('section','','card hero');
     const success = view.outcome === 'success';
     hero.append(el('h1',success ? '성공!' : '실패!'));
     const text = success ? view.successText : view.failureText;
     if (text) hero.append(el('p',text,'result-text'));
+    if (stageId === 0 && success) {
+      if (view.fixedTerms?.length) {
+        for (const term of view.fixedTerms) hero.append(el('p', term));
+      }
+      hero.append(el('p', '이제 튜토리얼이 완료되었습니다. 스테이지를 클리어하며 게임을 진행해보세요.'));
+    }
     if (!success) {
       const reasons = {time:'제한 시간이 끝났습니다.',fatal:'대화를 계속할 수 없어 협상이 종료됐습니다.',system:'시스템 문제로 협상이 종료됐습니다.',limit:view.limitText ?? '대화 가능 횟수에 도달했습니다.'};
       if (view.endReason) hero.append(el('p',reasons[view.endReason]));
@@ -64,14 +71,15 @@ export class ResultReportView {
         }
       }
       const axes=this.section('말투의 네 가지 모습','axes');
-      for (const [code,title,left,right] of AXES) {
+      for (const code of AXES) {
+        const { label: title, leftLabel: left, rightLabel: right } = STYLE_AXIS_LABELS[code];
         const a=report?.axes.find(a=>a.code===code);
-        const enough=!!a && a.sampleCount>=3 && !a.insufficient && a.position!==null && Number.isFinite(a.position);
+        const enough=!!a && a.sampleCount>=MIN_AXIS_SAMPLE && !a.insufficient && a.position!==null && Number.isFinite(a.position);
         const row=el('div','',`axis${enough ? '' : ' muted'}`); row.append(el('h3',title));
         const scale=el('div','','scale'), track=el('div','','track'); track.setAttribute('aria-hidden','true');
         if (enough) { const dot=el('span','','dot'); dot.style.left=`${Math.max(0,Math.min(100,a!.position!))}%`; track.append(dot); }
         scale.append(el('span',left),track,el('span',right)); row.append(scale);
-        if (!enough) row.append(el('p',a ? '판단할 발화가 부족해요.' : '분석값을 불러오지 못했어요.','axis-note'));
+        if (!enough) row.append(el('p',a ? INSUFFICIENT_AXIS_NOTE : '분석값을 불러오지 못했어요.','axis-note'));
         axes.append(row);
       }
       if (!failed || report?.validUtteranceCount===0) {

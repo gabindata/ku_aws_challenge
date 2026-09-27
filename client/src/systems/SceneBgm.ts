@@ -19,24 +19,50 @@ export function installSceneBgm(game: Phaser.Game): void {
     [SceneKey.Result]: 'stage-bgm',
     [SceneKey.StyleReport]: 'stage-bgm',
   };
-  let current: Phaser.Sound.BaseSound | undefined;
+  // 씬 전환 중에도 게임 전체의 업데이트에서 음량 페이드를 이어간다.
+  const fadeMs = 900;
+  type Track = {
+    sound: Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
+    gain: number;
+  };
+  const playing = new Map<string, Track>();
+  let selected: string | undefined;
+  let lastTime = performance.now();
+  const updateVolume = () => {
+    for (const { sound, gain } of playing.values()) sound.setVolume(gameSettings.bgm * gain);
+  };
   const update = () => {
+    const now = performance.now();
+    const step = Math.max(0, now - lastTime) / fadeMs;
+    lastTime = now;
     const scene = game.scene.getScenes(true).at(-1);
     const key = scene && tracks[scene.sys.settings.key];
-    if (!key || current?.key === key || !game.cache.audio.exists(key)) return;
-    current?.stop();
-    current?.destroy();
-    current = game.sound.add(key, { loop: true, volume: gameSettings.bgm });
-    current.play();
-  };
-  const updateVolume = () => {
-    if (current) (current as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound).setVolume(gameSettings.bgm);
+    if (key && key !== selected && game.cache.audio.exists(key)) {
+      selected = key;
+      if (!playing.has(key)) {
+        const sound = game.sound.add(key, { loop: true, volume: 0 }) as Track['sound'];
+        playing.set(key, { sound, gain: 0 });
+        sound.play();
+      }
+    }
+    for (const [key, track] of playing) {
+      track.gain = key === selected
+        ? Math.min(1, track.gain + step)
+        : Math.max(0, track.gain - step);
+      track.sound.setVolume(gameSettings.bgm * track.gain);
+      if (key !== selected && track.gain === 0) {
+        track.sound.stop();
+        track.sound.destroy();
+        playing.delete(key);
+      }
+    }
   };
   game.events.on(Phaser.Core.Events.POST_STEP, update);
   window.addEventListener('game-settings-change', updateVolume);
   game.events.once(Phaser.Core.Events.DESTROY, () => {
     game.events.off(Phaser.Core.Events.POST_STEP, update);
     window.removeEventListener('game-settings-change', updateVolume);
-    current?.destroy();
+    for (const { sound } of playing.values()) sound.destroy();
+    playing.clear();
   });
 }

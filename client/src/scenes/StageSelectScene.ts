@@ -1,3 +1,4 @@
+import { QuestPanel } from '../ui/QuestPanel';
 import { BLOCKED_AREAS, SOURCE_MAP_WIDTH, SOURCE_MAP_HEIGHT } from '../config/townMap';
 import { StageInfoPanel } from '../ui/StageInfoPanel';
 
@@ -319,6 +320,8 @@ export class StageSelectScene extends Phaser.Scene {
         } });
       },
     });
+
+    new QuestPanel(this, () => !this.stageInfoPanel.isOpen);
 
     // =========================
     // 다른 씬으로 이동할 때 게임 시간 저장

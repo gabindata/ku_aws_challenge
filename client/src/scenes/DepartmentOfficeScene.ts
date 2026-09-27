@@ -307,7 +307,7 @@ export class DepartmentOfficeScene extends Phaser.Scene {
         this.assistantHan.y - height * (15 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '28px',
           color: '#ffffff',
@@ -357,7 +357,7 @@ export class DepartmentOfficeScene extends Phaser.Scene {
         height * (450 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '32px',
           color: '#ffffff',

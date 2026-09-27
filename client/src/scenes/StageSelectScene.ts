@@ -498,7 +498,7 @@ export class StageSelectScene extends Phaser.Scene {
       0,
       '[F]',
       {
-        fontFamily: 'YPairing',
+        fontFamily: 'Galmuri11',
         fontStyle: 'bold',
         fontSize: '24px',
         color: '#ffffff',
@@ -631,7 +631,7 @@ export class StageSelectScene extends Phaser.Scene {
         0,
         '00:00',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'normal',
           fontSize: '32px',
           color: '#ffffff',

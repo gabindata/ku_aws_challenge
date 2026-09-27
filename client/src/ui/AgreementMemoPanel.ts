@@ -13,11 +13,11 @@ export class AgreementMemoPanel {
 
   constructor(scene: Phaser.Scene, x: number, y: number, width = 530) {
     scene.add.image(x, y, 'common-panel').setDisplaySize(width, 300).setOrigin(0).setDepth(30);
-    scene.add.text(x + 32, y + 16, '합의 메모', { fontFamily: 'YPairing', fontStyle: 'normal', fontSize: '26px', color: '#ffffff' }).setDepth(31);
-    this.text = scene.add.text(x + 32, y + 65, '', { fontFamily: 'YPairing', fontSize: '24px', color: '#ffffff', wordWrap: { width: width - 64 } }).setDepth(31);
-    this.previous = scene.add.text(x + 20, y + 257, '◀', { fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
-    this.next = scene.add.text(x + width - 48, y + 257, '▶', { fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
-    this.pageLabel = scene.add.text(x + width / 2, y + 257, '', { fontFamily: 'YPairing', fontSize: '20px' }).setOrigin(0.5, 0).setDepth(31);
+    scene.add.text(x + 32, y + 16, '합의 메모', { fontFamily: 'Galmuri11', fontStyle: 'normal', fontSize: '26px', color: '#ffffff' }).setDepth(31);
+    this.text = scene.add.text(x + 32, y + 65, '', { fontFamily: 'Galmuri11', fontSize: '24px', color: '#ffffff', wordWrap: { width: width - 64 } }).setDepth(31);
+    this.previous = scene.add.text(x + 20, y + 257, '◀', { fontFamily: 'Galmuri11', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
+    this.next = scene.add.text(x + width - 48, y + 257, '▶', { fontFamily: 'Galmuri11', fontStyle: 'bold', fontSize: '24px' }).setDepth(31).setInteractive({ useHandCursor: true });
+    this.pageLabel = scene.add.text(x + width / 2, y + 257, '', { fontFamily: 'Galmuri11', fontSize: '20px' }).setOrigin(0.5, 0).setDepth(31);
     this.previous.on('pointerdown', () => { playUiClick(scene); this.page = Math.max(0, this.page - 1); this.render(); });
     this.next.on('pointerdown', () => { playUiClick(scene); this.page = Math.min(this.items.length - 1, this.page + 1); this.render(); });
     this.update([]);

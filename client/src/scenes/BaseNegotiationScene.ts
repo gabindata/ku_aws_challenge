@@ -175,7 +175,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     );
 
     this.retryButton = this.add.text(width / 2, height - 160, '같은 발화 다시 전송', {
-      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '24px', color: '#ffffff', backgroundColor: '#333333',
+      fontFamily: 'Galmuri11', fontStyle: 'bold', fontSize: '24px', color: '#ffffff', backgroundColor: '#333333',
       padding: { x: 16, y: 8 },
     }).setOrigin(0.5).setDepth(40).setVisible(false)
       .setInteractive({ useHandCursor: true });

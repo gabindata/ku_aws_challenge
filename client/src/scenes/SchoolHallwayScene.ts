@@ -293,7 +293,7 @@ export class SchoolHallwayScene extends Phaser.Scene {
         height * (470 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '32px',
           color: '#ffffff',
@@ -332,7 +332,7 @@ export class SchoolHallwayScene extends Phaser.Scene {
         height * (90 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '32px',
           color: '#ffffff',

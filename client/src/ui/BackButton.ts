@@ -17,7 +17,7 @@ export class BackButton {
         y,
         '← 뒤로가기',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '24px',
           color: '#ffffff',

@@ -20,14 +20,7 @@ export class BootScene extends Phaser.Scene {
     // 모든 Scene에서 같은 TTSManager를 사용할 수 있도록 저장
     this.registry.set('ttsManager', ttsManager);
 
-    // Supertonic 모델 미리 로딩 시작
-    // await 하지 않음 → 게임 화면 로딩은 그대로 진행
-    ttsManager.init().catch((error) => {
-      console.error(
-        'Supertonic 사전 로딩 실패:',
-        error
-      );
-    });
+    this.game.events.once(Phaser.Core.Events.DESTROY, () => ttsManager.destroy());
 
     // =========================
     // 다음 Scene

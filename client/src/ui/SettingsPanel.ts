@@ -58,10 +58,6 @@ export class SettingsPanel {
       display();
       input.oninput = () => {
         setGameSetting(key, Number(input.value) / 100); display();
-        if (key === 'bgm') {
-          const bgm = scene.sound.get('main-bgm') as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound | null;
-          bgm?.setVolume(gameSettings.bgm);
-        }
       };
       input.onchange = () => { if (key === 'ui') playUiClick(scene); };
       row.append(heading, value, input); panel.append(row);

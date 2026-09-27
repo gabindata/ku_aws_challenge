@@ -830,6 +830,55 @@ async function noDoubleCount(): Promise<void> {
   ok('  설정 정지 누적은 그대로', sess.settingsPausedTotalMs < 2000, `${sess.settingsPausedTotalMs}ms`);
 }
 
+async function ttsRoute(): Promise<void> {
+  // 프론트가 쓰는 계약이다. 오류 코드가 바뀌면 클라이언트 분기가 깨진다.
+  // 실제 일레븐랩스를 부르지 않는 경로만 확인한다 (요금 0원).
+  const { ttsRouter } = await import('../routes/tts');
+
+  type Reply = { status: number; body: unknown };
+  const call = (body: unknown): Promise<Reply> => new Promise((resolve) => {
+    const res = {
+      statusCode: 200, headersSent: false, destroyed: false, writableEnded: false,
+      status(code: number) { this.statusCode = code; return this; },
+      json(payload: unknown) { resolve({ status: this.statusCode, body: payload }); return this; },
+      setHeader() { return this; }, send() { return this; },
+      on() { return this; }, off() { return this; },
+    };
+    const layer = (ttsRouter as unknown as { stack: { handle: Function }[] }).stack[0];
+    void layer.handle({ body, method: 'POST', url: '/tts' }, res, () => {});
+  });
+
+  const keyBefore = process.env.ELEVENLABS_API_KEY;
+  delete process.env.ELEVENLABS_API_KEY;
+
+  // 스테이지 JSON의 npcId가 전부 인식돼야 한다. 하나라도 빠지면 그 NPC가 벙어리가 된다
+  for (const npcId of [...new Set(loadAllStages().map((st) => st.npcId))]) {
+    const r = await call({ text: '안녕하세요', npcId });
+    ok(`${npcId} 목소리 설정이 있음`, r.status === 503, `${r.status} ${JSON.stringify(r.body)}`);
+  }
+
+  const bad = [
+    ['빈 문자열', { text: '', npcId: 'landlord' }],
+    ['공백만', { text: '   ', npcId: 'landlord' }],
+    ['text 없음', { npcId: 'landlord' }],
+    ['npcId 없음', { text: '안녕' }],
+    ['모르는 npcId', { text: '안녕', npcId: 'unknown_npc' }],
+    ['text가 문자열이 아님', { text: 123, npcId: 'landlord' }],
+    ['3000자 초과', { text: 'ㄱ'.repeat(3001), npcId: 'landlord' }],
+  ] as const;
+  for (const [name, body] of bad) {
+    const r = await call(body);
+    ok(`잘못된 요청 거부: ${name}`, r.status === 400
+      && (r.body as { error?: string }).error === 'INVALID_TTS_REQUEST',
+      `${r.status}`);
+  }
+
+  const ok3000 = await call({ text: 'ㄱ'.repeat(3000), npcId: 'landlord' });
+  ok('3000자는 통과', ok3000.status === 503, `${ok3000.status}`);
+
+  if (keyBefore !== undefined) process.env.ELEVENLABS_API_KEY = keyBefore;
+}
+
 async function idempotency(): Promise<void> {
   // 공통규칙 §3 — messageId는 발화, requestId는 처리 시도
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
@@ -888,6 +937,7 @@ async function main(): Promise<void> {
   await worldStateOnce();
   await successExtras();
   await reportPromptHygiene();
+  await ttsRoute();
   await settingsPause();
   await noDoubleCount();
   await asyncReport();

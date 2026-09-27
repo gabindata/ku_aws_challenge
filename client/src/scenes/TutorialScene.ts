@@ -98,7 +98,7 @@ export class TutorialScene extends Phaser.Scene {
     this.phase = 'transition'; this.lines = []; this.afterDialogue = undefined; this.moved = 0;
     this.sx = width / SOURCE_MAP_WIDTH; this.sy = height / SOURCE_MAP_HEIGHT;
     this.background = this.add.image(width / 2, height / 2, 'tutorial-town').setDisplaySize(width, height);
-    this.player = this.physics.add.sprite(1190 * this.sx, 600 * this.sy, 'raccoon-down-idle').setDisplaySize(140, 140).setDepth(10).setCollideWorldBounds(true);
+    this.player = this.physics.add.sprite(1190 * this.sx, 600 * this.sy, 'raccoon-down-idle').setDisplaySize(107, 107).setDepth(10).setCollideWorldBounds(true);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     // 꼬리와 투명 여백을 제외한 몸통 중심의 충돌 영역.
     body.setSize(650, 520).setOffset(302, 390);
@@ -141,7 +141,7 @@ export class TutorialScene extends Phaser.Scene {
         };
         if (this.completionLines.length) {
           this.say(this.completionLines, finish);
-          this.speaker.setText('고정 안내');
+          this.speaker.setText('안내');
         } else finish();
       } else this.showGuide('WASD로 움직여보자. (방향키도 사용할 수 있어요)');
     });
@@ -180,7 +180,7 @@ export class TutorialScene extends Phaser.Scene {
     this.physics.world.setBounds(left, top, rw, rh);
     this.facing = 'up';
     this.player.setPosition(left + rw * 0.5, top + rh * 0.78)
-      .setTexture('raccoon-up-idle').setDisplaySize(170, 170);
+      .setTexture('raccoon-up-idle').setDisplaySize(130, 130);
     (this.player.body as Phaser.Physics.Arcade.Body).reset(this.player.x, this.player.y);
     // 실내 벽과 가구. 침대 오른쪽 통로까지 접근할 수 있다.
     const obstacles = [

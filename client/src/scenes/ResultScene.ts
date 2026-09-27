@@ -6,19 +6,25 @@ import { SessionResultPoller } from '../systems/SessionResultPoller';
 import { ResultReportView } from '../ui/ResultReportView';
 import { playUiClick } from '../ui/UiFeedback';
 
-/** 모든 정식 스테이지가 사용하는 결과/리포트 화면. */
+/** 튜토리얼과 정식 스테이지가 사용하는 결과/리포트 화면. */
 export class ResultScene extends Phaser.Scene {
   constructor() { super(SceneKey.Result); }
   create(data: { sessionId: string; stageId: number; view: ClientNegotiationView; returnTo?: ReturnLocation }): void {
     let active=true;
     let poller: SessionResultPoller | undefined;
     const view=data.view;
+    if (data.stageId === 0 && view.outcome === 'success') {
+      this.registry.set('tutorialCompleted', true);
+      try { localStorage.setItem('tutorialCompleted', 'true'); } catch { /* 현재 실행에는 반영 */ }
+    }
     const finish=(scene: string, payload: object) => {
       if (!active) return;
       active=false; poller?.stop(); this.scene.start(scene,payload);
     };
     const ui=new ResultReportView(view,data.stageId,()=>{
-      if (data.returnTo) {
+      if (data.stageId === 0) {
+        finish(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } });
+      } else if (data.returnTo) {
         finish(data.returnTo.scene, { returnPosition: data.returnTo.position });
       } else {
         finish(SceneKey.StageSelect, { spawnAt: data.stageId===1 ? 'store' : data.stageId===2 ? 'school' : 'default' });
@@ -35,7 +41,7 @@ export class ResultScene extends Phaser.Scene {
       active=false; poller?.stop(); ui.destroy();
       window.removeEventListener('offline',offline); window.removeEventListener('online',online);
     });
-    if (view.styleReport || view.reportStatus==='ready' || view.reportStatus==='failed') return;
+    if (view.reportStatus==='ready' || view.reportStatus==='failed' || (view.styleReport && view.reportStatus!=='pending')) return;
     poller=new SessionResultPoller(data.sessionId,result=>{
       if (!active || result.sessionId!==data.sessionId || result.stageId!==data.stageId) return;
       ui.setConnection('');

@@ -29,18 +29,13 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 튜토리얼 버튼
     this.createMenuButton(width / 2, 690, '튜토리얼', () => {
-      this.scene.start(SceneKey.Tutorial);
+      if (this.hasSeenTutorial()) this.showTutorialRequiredPopup(true);
+      else this.scene.start(SceneKey.Tutorial, { finishedNegotiation: false, completionLines: [] });
     });
 
     // 시작하기 버튼
     this.createMenuButton(width / 2, 810, '시작하기', () => {
-      let tutorialSeen = this.registry.get('tutorialSeen') === true;
-      try {
-        tutorialSeen ||= localStorage.getItem('tutorialSeen') === 'true'
-          || localStorage.getItem('tutorialCompleted') === 'true';
-      } catch { /* 저장 제한 시 현재 실행의 기록 사용 */ }
-
-      if (tutorialSeen) {
+      if (this.hasSeenTutorial()) {
         this.scene.start(SceneKey.StageSelect);
       } else {
         this.showTutorialRequiredPopup();
@@ -51,8 +46,15 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
 
-  //튜툐리얼 봤는지 확인하는 코드//
-  private showTutorialRequiredPopup(): void {
+  private hasSeenTutorial(): boolean {
+    if (this.registry.get('tutorialSeen') === true || this.registry.get('tutorialCompleted') === true) return true;
+    try {
+      return localStorage.getItem('tutorialSeen') === 'true'
+        || localStorage.getItem('tutorialCompleted') === 'true';
+    } catch { return false; }
+  }
+
+  private showTutorialRequiredPopup(replay = false): void {
     const { width, height } = this.scale;
 
     const overlay = this.add
@@ -72,7 +74,7 @@ export class MainMenuScene extends Phaser.Scene {
       .text(
         width / 2,
         height / 2 - 55,
-        '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
+        replay ? '튜토리얼을 다시 보겠습니까?' : '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
         {
           fontSize: '28px',
           color: '#ffffff',
@@ -134,13 +136,13 @@ export class MainMenuScene extends Phaser.Scene {
     yesButton.on('pointerdown', () => {
       playUiClick(this);
       closePopup();
-      this.scene.start(SceneKey.Tutorial);
+      this.scene.start(SceneKey.Tutorial, { finishedNegotiation: false, completionLines: [] });
     });
 
     noButton.on('pointerdown', () => {
       playUiClick(this);
       closePopup();
-      this.scene.start(SceneKey.StageSelect);
+      if (!replay) this.scene.start(SceneKey.StageSelect);
     });
   }
 

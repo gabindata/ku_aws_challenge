@@ -45,7 +45,7 @@ export class HouseScene extends Phaser.Scene {
     this.exitZone = this.add.zone(width * 0.50, height * 0.80, width * 0.17, height * 0.10);
     this.physics.add.existing(this.exitZone, true);
     this.exitText = this.add.text(width * 0.50, height * 0.87, '[F]', {
-      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '26px', color: '#ffffff', backgroundColor: '#000000aa',
+      fontFamily: 'Galmuri11', fontStyle: 'bold', fontSize: '26px', color: '#ffffff', backgroundColor: '#000000aa',
       padding: { x: 10, y: 6 },
     }).setOrigin(0.5).setDepth(10000).setVisible(false);
   }

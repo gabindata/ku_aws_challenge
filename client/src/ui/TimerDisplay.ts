@@ -23,7 +23,7 @@ export class TimerDisplay extends Phaser.GameObjects.Container {
       -22,
       '남은 시간',
       {
-        fontFamily: 'YPairing',
+        fontFamily: 'Galmuri11',
         fontSize: '20px',
         color: '#cccccc',
       }
@@ -37,7 +37,7 @@ export class TimerDisplay extends Phaser.GameObjects.Container {
       16,
       '10:00',
       {
-        fontFamily: 'YPairing',
+        fontFamily: 'Galmuri11',
         fontSize: '34px',
         color: '#ffffff',
         fontStyle: 'normal',

@@ -23,7 +23,7 @@ export class TutorialPhone {
     const close = scene.add.image(left + 580 * scale, top + 112 * scale, 'tutorial-phone-close-button')
       .setDisplaySize(64 * scale, 64 * scale).setInteractive({ useHandCursor: true });
     const hint = scene.add.text(width / 2, top + phoneHeight + 14, '메모장과 메시지를 클릭해 확인해보자.', {
-      fontFamily: 'YPairing', fontSize: '26px', color: '#ffffff',
+      fontFamily: 'Galmuri11', fontSize: '26px', color: '#ffffff',
       align: 'center', wordWrap: { width: width * 0.8 },
     }).setOrigin(0.5, 0);
     let readMemo = false;

@@ -12,7 +12,7 @@ export class MicButton extends Phaser.GameObjects.Container {
     this.icon = scene.add.image(0, -8, 'mic-button').setDisplaySize(100, 100)
       .setInteractive({ useHandCursor: true });
     this.label = scene.add.text(0, 50, '말하기', {
-      fontFamily: 'YPairing', fontStyle: 'bold', fontSize: '23px', color: '#ffffff', stroke: '#172332', strokeThickness: 4,
+      fontFamily: 'Galmuri11', fontStyle: 'bold', fontSize: '23px', color: '#ffffff', stroke: '#172332', strokeThickness: 4,
     }).setOrigin(0.5, 0);
     this.icon.on('pointerdown', () => {
       if (this.isDisabled) return;

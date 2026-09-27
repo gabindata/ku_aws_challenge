@@ -226,7 +226,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
         this.managerYang.y - height * (15 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '28px',
           color: '#ffffff',
@@ -273,7 +273,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
         height * (920 / SOURCE_HEIGHT),
         '[F]',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '32px',
           color: '#ffffff',

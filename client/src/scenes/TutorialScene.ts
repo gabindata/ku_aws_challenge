@@ -6,7 +6,7 @@ import { SceneKey } from '../types';
 import { BackButton } from '../ui/BackButton';
 import { gameSettings } from '../systems/GameSettings';
 
-type Phase = 'move' | 'trash' | 'door' | 'enter' | 'inside' | 'bed' | 'transition' | 'phone-ready' | 'phone' | 'landlord-door' | 'complete';
+type Phase = 'move' | 'trash' | 'enter' | 'inside' | 'bed' | 'transition' | 'phone-ready' | 'phone' | 'landlord-door' | 'complete';
 // 원본 지도(1672 × 941)의 좌표. 쓰레기통과 문 앞에서 상호작용한다.
 const TRASH = { x: 1235, y: 340 };
 const DOOR = { x: 1373, y: 340 };
@@ -24,7 +24,8 @@ export class TutorialScene extends Phaser.Scene {
   private stageInfo?: StageInfoPanel;
   private human = false;
   private phase: Phase = 'move';
-  private player!: Phaser.Physics.Arcade.Image;
+  private player!: Phaser.Physics.Arcade.Sprite;
+  private facing = 'down';
   private background!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private guideText = '';
@@ -68,13 +69,26 @@ export class TutorialScene extends Phaser.Scene {
     this.load.image('tutorial-room-dark', 'assets/images/tutorial/tutorial-room-dark.png');
     this.load.image('tutorial-town', 'assets/images/tutorial/town-map.png');
     for (const direction of ['up', 'down', 'left', 'right']) {
-      this.load.image(`raccoon-${direction}`, `assets/images/player/raccoon-${direction}.png`);
+      for (const pose of ['idle', 'walk-1', 'walk-2']) {
+        const key = `raccoon-${direction}-${pose}`;
+        this.load.image(key, `assets/images/player/${key}.png`);
+      }
     }
     this.load.audio('tutorial-impact', 'assets/audio/universfield-heavy-object-falling.mp3');
   }
 
   create(): void {
     const { width, height } = this.scale;
+    this.facing = 'down';
+    for (const direction of ['up', 'down', 'left', 'right']) {
+      const key = `raccoon-walk-${direction}`;
+      if (!this.anims.exists(key)) this.anims.create({
+        key,
+        frames: ['walk-1', 'idle', 'walk-2', 'idle'].map(pose => ({ key: `raccoon-${direction}-${pose}` })),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
     this.registry.set('tutorialSeen', true);
     try { localStorage.setItem('tutorialSeen', 'true'); } catch { /* 저장 제한 시 현재 실행에서는 기록 유지 */ }
     this.walls = []; this.darkness = undefined; this.human = false; this.stageInfo = undefined;
@@ -82,7 +96,7 @@ export class TutorialScene extends Phaser.Scene {
     this.phase = 'transition'; this.lines = []; this.afterDialogue = undefined; this.moved = 0;
     this.sx = width / SOURCE_MAP_WIDTH; this.sy = height / SOURCE_MAP_HEIGHT;
     this.background = this.add.image(width / 2, height / 2, 'tutorial-town').setDisplaySize(width, height);
-    this.player = this.physics.add.image(1190 * this.sx, 615 * this.sy, 'raccoon-down').setDisplaySize(140, 140).setDepth(10).setCollideWorldBounds(true);
+    this.player = this.physics.add.sprite(1190 * this.sx, 600 * this.sy, 'raccoon-down-idle').setDisplaySize(140, 140).setDepth(10).setCollideWorldBounds(true);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     // 꼬리와 투명 여백을 제외한 몸통 중심의 충돌 영역.
     body.setSize(650, 520).setOffset(302, 390);
@@ -97,7 +111,7 @@ export class TutorialScene extends Phaser.Scene {
     this.cameras.main.centerOn(this.player.x, this.player.y);
     const worldObjects = [...this.children.list];
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,F') as typeof this.keys;
-    const style = { fontFamily: 'YPairing', fontSize: '28px', color: '#ffffff', align: 'center' };
+    const style = { fontFamily: 'Galmuri11', fontSize: '28px', color: '#ffffff', align: 'center' };
     const guideBox = this.add.image(width / 2, height - 58, 'dialogue-box').setDisplaySize(width * 0.78, 88);
     this.guide = this.add.text(width / 2, height - 58, '', { ...style, wordWrap: { width: width * 0.72 } }).setOrigin(0.5);
     this.guideWindow = this.add.container(0, 0, [guideBox, this.guide]).setDepth(60).setVisible(false);
@@ -134,7 +148,7 @@ export class TutorialScene extends Phaser.Scene {
   private enterRoom(): void {
     const { width, height } = this.scale;
     this.phase = 'inside';
-    this.player.setVelocity(0, 0);
+    this.stopMoving();
     this.prompt.setVisible(false);
     this.cameras.main.stopFollow();
     this.cameras.main.setZoom(1).setScroll(0, 0);
@@ -151,8 +165,9 @@ export class TutorialScene extends Phaser.Scene {
     this.uiCamera.ignore(this.blackout);
     this.background.setTexture('tutorial-room-dark').setDisplaySize(rw, rh).clearTint();
     this.physics.world.setBounds(left, top, rw, rh);
+    this.facing = 'up';
     this.player.setPosition(left + rw * 0.5, top + rh * 0.78)
-      .setTexture('raccoon-up').setDisplaySize(170, 170);
+      .setTexture('raccoon-up-idle').setDisplaySize(170, 170);
     (this.player.body as Phaser.Physics.Arcade.Body).reset(this.player.x, this.player.y);
     // 실내 벽과 가구. 침대 오른쪽 통로까지 접근할 수 있다.
     const obstacles = [
@@ -204,7 +219,7 @@ export class TutorialScene extends Phaser.Scene {
 
   private revealBed(): void {
     this.phase = 'transition';
-    this.player.setVelocity(0, 0);
+    this.stopMoving();
     this.showGuide('');
     this.tweens.add({
       targets: this.darkness, alpha: 0, duration: 900,
@@ -223,7 +238,7 @@ export class TutorialScene extends Phaser.Scene {
   private jumpInSurprise(): void {
     const startX = this.player.x, startY = this.player.y;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    this.player.setVelocity(0, 0);
+    this.stopMoving();
     body.enable = false;
     this.tweens.add({
       targets: this.player, y: startY - 30, duration: 180, ease: 'Sine.easeOut', yoyo: true,
@@ -237,7 +252,7 @@ export class TutorialScene extends Phaser.Scene {
 
   private investigateBed(): void {
     this.phase = 'transition';
-    this.player.setVelocity(0, 0);
+    this.stopMoving();
     this.prompt.setVisible(false);
     this.showGuide('');
     // 느린 암전에서 빠른 암전으로 이어진 뒤 완전히 어두워진다.
@@ -257,6 +272,9 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   private revealHuman(): void {
+    this.stopMoving();
+    this.human = true;
+    this.facing = 'down';
     const { left, top, width, height } = this.room;
     this.background.setTexture('tutorial-room-empty').setDisplaySize(width, height);
     this.darkness?.setVisible(false);
@@ -290,10 +308,18 @@ export class TutorialScene extends Phaser.Scene {
       this.phase = 'transition';
       this.showGuide('');
       this.doorSound = this.sound.add('tutorial-door-knock', { volume: gameSettings.ui });
-      this.afterSound(this.doorSound, () => {
+      // 노크 후 대사를 확실히 시작한다. 완료 이벤트가 오지 않아도 멈추지 않는다.
+      let announced = false;
+      const announce = () => {
+        if (announced || !this.scene.isActive()) return;
+        announced = true;
+        this.doorSound?.off('complete', announce);
         this.say(['안에 있는 거 다 알아! 문 열어요!'], () => this.prepareLandlordDoor());
         this.speaker.setText('고금자');
-      });
+      };
+      this.doorSound.once('complete', announce);
+      this.doorSound.play();
+      this.time.delayedCall(1800, announce);
     });
     this.cameras.main.ignore(phone.container);
   }
@@ -305,7 +331,7 @@ export class TutorialScene extends Phaser.Scene {
     body.setSize(this.player.width * 0.45, this.player.height * 0.65);
     body.setOffset(this.player.width * 0.275, this.player.height * 0.25);
     body.enable = true;
-    body.reset(this.player.x, this.player.y);
+    body.reset(this.room.left + this.room.width * 0.37, this.player.y);
     this.showGuide('현관문 앞으로 가서 F를 눌러보자.');
     this.stageInfo = new StageInfoPanel(this, {
       stageTitle: '튜토리얼 · 원룸 현관', npcName: '고금자',
@@ -353,15 +379,23 @@ export class TutorialScene extends Phaser.Scene {
     this.speaker.setText('너구리');
     this.nextHint.setVisible(true);
     this.lines = [...lines]; this.afterDialogue = done;
-    this.player.setVelocity(0, 0); this.prompt.setVisible(false);
+    this.stopMoving(); this.prompt.setVisible(false);
     this.dialogue.setVisible(true); this.line.setText(this.lines.shift()!);
+  }
+
+  private stopMoving(): void {
+    this.player.setVelocity(0, 0);
+    if (this.player.anims.isPlaying) {
+      this.player.anims.stop();
+      this.player.setTexture(`${this.human ? '' : 'raccoon-'}${this.facing}-idle`);
+    }
   }
 
   update(_time: number, delta: number): void {
     const pressed = Phaser.Input.Keyboard.JustDown(this.keys.F);
-    if (this.stageInfo?.isOpen) { this.player.setVelocity(0, 0); this.prompt.setVisible(false); return; }
+    if (this.stageInfo?.isOpen) { this.stopMoving(); this.prompt.setVisible(false); return; }
     if (this.speaking) {
-      this.player.setVelocity(0, 0);
+      this.stopMoving();
       if (pressed) {
         const line = this.lines.shift();
         if (line) this.line.setText(line);
@@ -382,7 +416,7 @@ export class TutorialScene extends Phaser.Scene {
       return;
     }
     if (this.phase === 'transition' || this.phase === 'phone' || this.phase === 'complete') {
-      this.player.setVelocity(0, 0);
+      this.stopMoving();
       return;
     }
     const dx = Number(this.keys.D.isDown || this.keys.RIGHT.isDown) - Number(this.keys.A.isDown || this.keys.LEFT.isDown);
@@ -391,9 +425,10 @@ export class TutorialScene extends Phaser.Scene {
     this.player.setVelocity(dx / length * 260, dy / length * 260);
     if (dx || dy) {
       const direction = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
-      this.player.setTexture(this.human ? `${direction}-idle` : `raccoon-${direction}`);
+      this.facing = direction;
+      this.player.play(`${this.human ? '' : 'raccoon-'}walk-${direction}`, true);
       this.moved += Math.min(delta, 100);
-    }
+    } else this.stopMoving();
     if (this.phase === 'landlord-door') {
       const body = this.player.body as Phaser.Physics.Arcade.Body;
       const near = Math.abs((body.center.x - this.room.left) / this.room.width - 0.5) < 0.12
@@ -422,15 +457,12 @@ export class TutorialScene extends Phaser.Scene {
       if (pressed) this.say(['먹을 게 없네…', '인간들은 이렇게 많이 버리면서 먹을 건 하나도 안 버리나?'], () => {
         this.phase = 'transition';
         this.impact = this.sound.add('tutorial-impact', { volume: gameSettings.ui });
-        this.afterSound(this.impact, () => this.say(['뭐지? 저 집에서 소리가 난 것 같은데…'], () => {
-          this.phase = 'door';
-          this.showGuide('소리가 난 집의 문 앞으로 가보자.');
+        this.afterSound(this.impact, () => this.say(['뭐지? 저 집에서 소리가 난 것 같은데…', '문도 열려있네, 한 번 가보자.'], () => {
+          this.phase = 'enter';
+          this.showGuide('문 앞에서 F버튼을 눌러 집 안으로 들어가자.');
         }));
       });
     } else if (this.phase === 'trash') this.showGuide('집 왼쪽의 쓰레기통을 조사해보자.');
-    if (this.phase === 'door' && near(DOOR, 110)) {
-      this.say(['문도 열려있네, 한 번 가보자.'], () => { this.phase = 'enter'; this.showGuide('문 앞에서 F버튼을 눌러 집 안으로 들어가자.'); });
-    }
     if (this.phase === 'enter' && near(DOOR, 80)) {
       this.prompt.setPosition(DOOR.x * this.sx, (DOOR.y - 50) * this.sy).setVisible(true);
       if (pressed) {

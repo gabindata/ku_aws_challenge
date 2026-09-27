@@ -6,7 +6,7 @@
   overscroll-behavior:contain;
   background:#edeae2;
   color:#292c30;
-  font-family:YPairing,sans-serif;
+  font-family:Galmuri11,sans-serif;
   line-height:1.7}
 .result-report * {
   box-sizing:border-box}
@@ -15,7 +15,7 @@
   margin:auto;
   padding:40px 0 64px}
 .result-report .eyebrow {
-  font:400 14px/1.5 YPairing,sans-serif;
+  font:400 14px/1.5 Galmuri11,sans-serif;
   letter-spacing:.2em;
   margin:0 0 20px;
   color:#666963}
@@ -123,7 +123,7 @@
   background:#fffdf7;
   color:#292c30;
   padding:12px 34px;
-  font:700 20px YPairing,sans-serif;
+  font:700 20px Galmuri11,sans-serif;
   box-shadow:3px 3px 0 #b9bcb1}
 .result-report button:hover {
   background:#e1e5d8}
@@ -168,7 +168,7 @@
   background: transparent url('/assets/images/ui/button-highlight.png') center / 100% 100% no-repeat;
 }
 
-.result-report { font-family: YPairing, sans-serif; font-weight: 400; }
+.result-report { font-family: Galmuri11, sans-serif; font-weight: 400; }
 .result-report h1, .result-report h2, .result-report h3, .result-report p,
 .result-report blockquote, .result-report figcaption { font-weight: 400; }
 .result-report button, .result-report .observation h3 { font-weight: 700; }

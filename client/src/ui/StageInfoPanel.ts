@@ -55,7 +55,7 @@ export class StageInfoPanel {
         centerY - panelHeight / 2 + panelHeight * 0.105,
         config.stageTitle,
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontSize: '36px',
           fontStyle: 'normal',
           color: '#ffffff',
@@ -73,7 +73,7 @@ export class StageInfoPanel {
         centerY - panelHeight / 2 + panelHeight * 0.175,
         config.npcName,
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontSize: '36px',
           fontStyle: 'bold',
           color: '#ffe6a3',
@@ -91,7 +91,7 @@ export class StageInfoPanel {
         centerY - panelHeight / 2 + panelHeight * 0.265,
         config.description,
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontSize: '28px',
           color: '#263746',
           align: 'center',
@@ -181,7 +181,7 @@ export class StageInfoPanel {
       .text(x, y, text, {
         fontSize: '28px',
         color: '#ffffff',
-        fontFamily: 'YPairing',
+        fontFamily: 'Galmuri11',
         fontStyle: 'bold',
         letterSpacing: 12,
         padding: {

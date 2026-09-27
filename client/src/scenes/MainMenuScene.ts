@@ -84,7 +84,7 @@ export class MainMenuScene extends Phaser.Scene {
         {
           fontSize: '28px',
           color: '#ffffff',
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           align: 'center',
           lineSpacing: 10,
         }
@@ -97,7 +97,7 @@ export class MainMenuScene extends Phaser.Scene {
         height / 2 + 70,
         '예',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '26px',
           color: '#ffffff',
@@ -117,7 +117,7 @@ export class MainMenuScene extends Phaser.Scene {
         height / 2 + 70,
         '아니요',
         {
-          fontFamily: 'YPairing',
+          fontFamily: 'Galmuri11',
           fontStyle: 'bold',
           fontSize: '26px',
           color: '#ffffff',
@@ -167,7 +167,7 @@ export class MainMenuScene extends Phaser.Scene {
     .text(x, y, text, {
       fontSize: '36px',
       color: '#ffffff',
-      fontFamily: 'YPairing',
+      fontFamily: 'Galmuri11',
       fontStyle: 'bold',
       letterSpacing: 20,
 

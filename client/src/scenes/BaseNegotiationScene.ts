@@ -1,3 +1,4 @@
+import { getWorldState, saveRewards } from '../systems/NegotiationProgress';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { SessionResultPoller } from '../systems/SessionResultPoller';
 import { playUiClick } from '../ui/UiFeedback';
@@ -237,7 +238,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.dialogueBox.showText(`${this.stage.npcName} 대화를 준비하고 있어요.`);
 
     try {
-      const response = await startNegotiation(this.stage.stageId);
+      const response = await startNegotiation(this.stage.stageId, getWorldState());
       if (generation !== this.sceneGeneration) return;
 
       this.sessionId = response.sessionId;
@@ -664,6 +665,14 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.ttsManager.cancel();
     this.retryButton.setVisible(false);
     this.updateInputState();
+    if (response.outcome === 'success' && response.rewards) saveRewards(response.rewards);
+    if (this.stage.stageId === 0 && response.outcome === 'success') {
+      this.scene.start(SceneKey.Tutorial, {
+        finishedNegotiation: true,
+        completionLines: [response.successText, ...(response.fixedTerms ?? [])].filter(Boolean),
+      });
+      return;
+    }
     this.scene.start(SceneKey.Result, { sessionId: this.sessionId, view: response, stageId: this.stage.stageId, returnTo: this.returnTo });
   }
 }

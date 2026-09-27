@@ -21,6 +21,7 @@ const TUTORIAL_BLOCKED_AREAS = BLOCKED_AREAS.map(area => {
 /** 골목 탐색과 어두운 원룸의 휴대폰 확인과 노크 소리까지 진행한다. 튜토리얼 완료/해금은 처리하지 않는다. */
 export class TutorialScene extends Phaser.Scene {
   private finishedNegotiation = false;
+  private completionLines: string[] = [];
   private stageInfo?: StageInfoPanel;
   private human = false;
   private phase: Phase = 'move';
@@ -54,8 +55,9 @@ export class TutorialScene extends Phaser.Scene {
 
   constructor() { super(SceneKey.Tutorial); }
 
-  init(data: { finishedNegotiation?: boolean } = {}): void {
+  init(data: { finishedNegotiation?: boolean; completionLines?: string[] } = {}): void {
     this.finishedNegotiation = data.finishedNegotiation === true;
+    this.completionLines = data.completionLines ?? [];
   }
 
   preload(): void {
@@ -130,15 +132,26 @@ export class TutorialScene extends Phaser.Scene {
     uiCamera.once(Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE, () => {
       this.phase = 'move';
       if (this.finishedNegotiation) {
-        this.human = true;
-        this.player.setTexture('down-idle');
-        this.player.setPosition(1373 * this.sx, 380 * this.sy);
         this.phase = 'complete';
+        this.registry.set('tutorialCompleted', true);
         try { localStorage.setItem('tutorialCompleted', 'true'); } catch {}
-        this.showGuide('이제 튜토리얼이 완료되었습니다. 스테이지를 클리어하며 게임을 진행해보세요.');
-        this.time.delayedCall(4500, () => this.scene.start(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } }));
+        const finish = () => {
+          this.showGuide('이제 튜토리얼이 완료되었습니다. 스테이지를 클리어하며 게임을 진행해보세요.');
+          this.time.delayedCall(4500, () => this.scene.start(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } }));
+        };
+        if (this.completionLines.length) {
+          this.say(this.completionLines, finish);
+          this.speaker.setText('고정 안내');
+        } else finish();
       } else this.showGuide('WASD로 움직여보자. (방향키도 사용할 수 있어요)');
     });
+    if (this.finishedNegotiation) {
+      this.human = true;
+      this.player.setTexture('down-idle').setDisplaySize(140, 140);
+      (this.player.body as Phaser.Physics.Arcade.Body).reset(1373 * this.sx, 380 * this.sy);
+      (this.player.body as Phaser.Physics.Arcade.Body).enable = false;
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+    }
     uiCamera.fadeIn(1800, 0, 0, 0);
     uiCamera.ignore([...worldObjects, this.prompt]);
     this.cameras.main.ignore([this.guideWindow, this.dialogue, back.button]);

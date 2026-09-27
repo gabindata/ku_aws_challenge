@@ -271,7 +271,9 @@ async function stage1Schedule(): Promise<void> {
   const system = buildJudgeSystem(stage);
   ok('NPC가 먼저 5일을 원한다', system.includes('먼저 그렇게 제안한다'));
   ok('  3일 이상이면 받아들인다', system.includes('평일 3일 이상을 야간 통째로'));
-  ok('  시간은 쪼개지 않는다', system.includes('시간은 쪼갤 수가 없어요'));
+  ok('  부분 근무는 받지 않는다', system.includes('부분 근무는 안 받아요'));
+  ok('  요일마다 시간이 다르면 확인', a.clarifyWhen.some((l) => l.includes('요일마다 시간이 다르다')));
+  ok('  통째인 요일만 따로 세지 않는다', a.clarifyWhen.some((l) => l.includes('통째인 요일만 따로 세지 않고')));
   ok('  최소선을 먼저 말하지 않는다', system.includes('최소선이라는 것을 먼저 말하지 않는다'));
 }
 

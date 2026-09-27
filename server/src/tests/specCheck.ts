@@ -253,6 +253,30 @@ async function tutorial(): Promise<void> {
   }
 }
 
+async function stage1Schedule(): Promise<void> {
+  // 스테이지 1 근무 일정은 흥정 대상이다. 최소선은 평일 3일이고 시간은 통째다.
+  const stage = getStage(1)!;
+  const a = stage.agreementDefinitions.scheduleAgreed;
+
+  ok('일정 의도에 최소선이 적힘', a.intent.includes('3일 이상'), a.intent);
+  ok('  시간은 통째임을 명시', a.intent.includes('23:00~07:00'));
+  ok('  3일 이상이면 통과', a.passWhen.some((l) => l.includes('3일 이상')));
+  ok('  5일도 통과한다고 명시', a.passWhen.some((l) => l.includes('5일')));
+  ok('  2일 이하는 재확인', a.clarifyWhen.some((l) => l.includes('2일 이하')));
+  ok('  시간 일부만은 재확인', a.clarifyWhen.some((l) => l.includes('일부만')));
+  ok('  복창을 요구하지 않음', a.passWhen.some((l) => l.includes('복창할 필요는 없다')));
+  ok('  메모가 5일로 굳지 않게 안내', (a.memoGuide ?? '').includes('5일로 정해진 것처럼'));
+
+  // 페르소나가 기준과 어긋나면 NPC는 5일을 고집하는데 판정은 3일을 통과시킨다
+  const system = buildJudgeSystem(stage);
+  ok('NPC가 먼저 5일을 원한다', system.includes('먼저 그렇게 제안한다'));
+  ok('  3일 이상이면 받아들인다', system.includes('평일 3일 이상을 야간 통째로'));
+  ok('  부분 근무는 받지 않는다', system.includes('부분 근무는 안 받아요'));
+  ok('  요일마다 시간이 다르면 확인', a.clarifyWhen.some((l) => l.includes('요일마다 시간이 다르다')));
+  ok('  통째인 요일만 따로 세지 않는다', a.clarifyWhen.some((l) => l.includes('통째인 요일만 따로 세지 않고')));
+  ok('  최소선을 먼저 말하지 않는다', system.includes('최소선이라는 것을 먼저 말하지 않는다'));
+}
+
 async function budgets(): Promise<void> {
   // 공통규칙 §4
   ok('판정 상한 40', MAX_LLM_CALLS_PER_SESSION === 40);
@@ -929,6 +953,7 @@ async function main(): Promise<void> {
   await stageData();
   await persona();
   await tutorial();
+  await stage1Schedule();
   await budgets();
   await callCeiling();
   await selfProposal();

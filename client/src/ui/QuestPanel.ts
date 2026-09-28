@@ -41,7 +41,14 @@ export class QuestPanel {
     this.root.append(header, body);
     // 목록 클릭이 뒤에 있는 게임의 포인터 입력으로 전달되지 않게 한다.
     const stop = (event: Event) => event.stopPropagation();
-    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'wheel', 'keydown', 'keyup']) this.root.addEventListener(type, stop);
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'wheel']) this.root.addEventListener(type, stop);
+    // 포인터 클릭 후 버튼에 남은 포커스를 돌려주고, 이동 키는 Phaser까지 전달한다.
+    header.addEventListener('pointerup', () => header.blur());
+    this.root.addEventListener('keydown', event => {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+        header.blur();
+      }
+    });
     document.body.append(this.root);
     const position = () => {
       const rect = scene.game.canvas.getBoundingClientRect();

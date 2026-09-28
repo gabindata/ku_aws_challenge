@@ -7,6 +7,8 @@ export class DialogueBox extends Phaser.GameObjects.Container {
   private dialogueText: Phaser.GameObjects.Text;
 
   private npcName: string;
+  private thinking = false;
+  private dots: Phaser.GameObjects.Text[] = [];
 
   constructor(
     scene: Phaser.Scene,
@@ -62,6 +64,20 @@ export class DialogueBox extends Phaser.GameObjects.Container {
       this.dialogueText,
     ]);
 
+    const baseY = -boxHeight / 2 + 65;
+    this.dots = [0, 1, 2].map(index => {
+      const dot = scene.add.text(-width / 2 + 40 + index * 18, baseY, '.', {
+        fontFamily: 'Galmuri11', fontSize: '32px', fontStyle: 'bold', color: '#ffffff',
+      }).setVisible(false);
+      this.add(dot);
+      return dot;
+    });
+    const animate = (time: number) => {
+      if (!this.thinking) return;
+      this.dots.forEach((dot, index) => dot.setY(baseY + Math.sin(time / 160 - index * 0.85) * 7));
+    };
+    scene.events.on(Phaser.Scenes.Events.UPDATE, animate);
+    this.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.UPDATE, animate));
     this.setDepth(20);
   }
 
@@ -85,11 +101,15 @@ export class DialogueBox extends Phaser.GameObjects.Container {
 
   /** 대사 내용 표시 */
   showText(text: string): void {
+    this.thinking = false;
+    this.dots.forEach(dot => dot.setVisible(false));
     this.dialogueText.setText(text);
   }
 
   /** 대기 상태 표시 */
   showThinking(): void {
-    this.dialogueText.setText('...');
+    this.dialogueText.setText('');
+    this.thinking = true;
+    this.dots.forEach(dot => dot.setVisible(true));
   }
 }

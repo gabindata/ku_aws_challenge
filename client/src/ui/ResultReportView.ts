@@ -9,12 +9,21 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = '') 
 export class ResultReportView {
   readonly root = el('main', '', 'result-report');
   private analysis = el('div');
+  private page = el('div','','report-page');
+  private loading = el('section','','report-generating');
   private notice = el('p', '', 'connection');
   private signature = '';
   constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void) {
     this.root.tabIndex = -1;
     this.root.setAttribute('aria-label','협상 결과 리포트');
-    const page = el('div','','report-page');
+    const page = this.page;
+    this.loading.setAttribute('role', 'status');
+    this.loading.setAttribute('aria-live', 'polite');
+    this.loading.append(el('h1', '생성 중'), el('p', '결과 리포트를 만들고 있어요. 잠시만 기다려 주세요.'), el('p', '나가지 마세요.'));
+    const dots = el('div', '', 'report-loading-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 3; i++) dots.append(el('span', '●'));
+    this.loading.append(dots);
     page.append(el('p',stageId === 0 ? '튜토리얼 · 대화 기록' : `STAGE ${stageId} · 대화 기록`,'eyebrow'));
     const hero = el('section','','card hero');
     const success = view.outcome === 'success';
@@ -40,7 +49,7 @@ export class ResultReportView {
     const button = (text: string, fn: () => void) => { const b=el('button',text); b.type='button'; b.onclick=() => { onButtonClick(); fn(); }; return b; };
     if (!success) actions.append(button('다시 하기',onRetry));
     if (success || view.onClose !== 'restart') actions.append(button('나가기',onExit));
-    page.append(hero,this.notice,this.analysis,actions); this.root.append(page);
+    page.append(hero,this.analysis,actions); this.root.append(this.loading,this.notice,page);
     document.body.append(this.root); this.update(view); this.root.focus();
   }
   setConnection(message: string): void { this.notice.textContent=message; }
@@ -54,8 +63,12 @@ export class ResultReportView {
     const scroll=this.root.scrollTop;
     this.analysis.replaceChildren();
     const report=view.styleReport, narrative=report?.narrative;
-    const failed=view.reportStatus==='failed' || report?.analysisFailed===true;
-    if (!failed && (view.reportStatus==='pending' || !report)) {
+    const failed=view.reportStatus==='failed' || report?.analysisFailed===true || (view.reportStatus==='ready' && !report);
+    const pending = !failed && (view.reportStatus==='pending' || !report);
+    this.loading.hidden = !pending;
+    this.page.hidden = pending;
+    this.root.setAttribute('aria-busy', String(pending));
+    if (pending) {
       const s=this.section('대화를 분석하고 있어요','loading'); s.setAttribute('role','status');
       s.append(el('p','결과는 확정됐어요. 말투 리포트를 준비하고 있어요.'));
     } else {

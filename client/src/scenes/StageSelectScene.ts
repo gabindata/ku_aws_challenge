@@ -1,3 +1,5 @@
+import { getQuests } from '../systems/NegotiationProgress';
+import { showChapterComplete } from '../ui/ChapterCompletePanel';
 import { QuestPanel } from '../ui/QuestPanel';
 import { BLOCKED_AREAS, SOURCE_MAP_WIDTH, SOURCE_MAP_HEIGHT } from '../config/townMap';
 import { StageInfoPanel } from '../ui/StageInfoPanel';
@@ -65,6 +67,7 @@ const INTERACTION_AREAS: InteractionArea[] = [
 
 export class StageSelectScene extends Phaser.Scene {
   private player!: Player;
+  private chapterCompleteOpen = false;
   private stageInfoPanel!: StageInfoPanel;
   private returnPosition?: { x: number; y: number };
 
@@ -119,6 +122,7 @@ export class StageSelectScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
+    this.chapterCompleteOpen = false;
     this.interactionZones = [];
     this.infoCameraFrozen = false;
 
@@ -322,6 +326,12 @@ export class StageSelectScene extends Phaser.Scene {
     });
 
     new QuestPanel(this, () => !this.stageInfoPanel.isOpen);
+    if (getQuests().every(quest => quest.done) && !this.registry.get('chapterCompleteShown')) {
+      this.chapterCompleteOpen = true;
+      this.registry.set('chapterCompleteShown', true);
+      this.player.setVelocity(0, 0);
+      showChapterComplete(this);
+    }
 
     // =========================
     // 다른 씬으로 이동할 때 게임 시간 저장
@@ -339,6 +349,7 @@ export class StageSelectScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.chapterCompleteOpen) return;
     const interactPressed = Phaser.Input.Keyboard.JustDown(this.interactKey);
     if (this.stageInfoPanel.isOpen) {
       this.player.setVelocity(0, 0);

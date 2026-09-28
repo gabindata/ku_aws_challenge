@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { gameSettings } from '../systems/GameSettings';
 import { SceneKey } from '../types';
 import type { ClientNegotiationView, ReturnLocation } from '../types';
 import { ApiError } from '../systems/ApiClient';
@@ -11,6 +12,7 @@ export class ResultScene extends Phaser.Scene {
   constructor() { super(SceneKey.Result); }
   create(data: { sessionId: string; stageId: number; view: ClientNegotiationView; returnTo?: ReturnLocation }): void {
     let active=true;
+    let resultSound: Phaser.Sound.BaseSound | undefined;
     let poller: SessionResultPoller | undefined;
     let view=data.view;
     if (data.stageId === 0 && view.outcome === 'success') {
@@ -26,6 +28,7 @@ export class ResultScene extends Phaser.Scene {
         finish(SceneKey.Tutorial, { finishedNegotiation: true, completionLines: [] });
       } else if (data.stageId === 0) {
         finish(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } });
+
       } else if (data.returnTo) {
         finish(data.returnTo.scene, { returnPosition: data.returnTo.position });
       } else {
@@ -34,13 +37,19 @@ export class ResultScene extends Phaser.Scene {
     },()=>{
       const scene=[SceneKey.TutorialNegotiation,SceneKey.Negotiation1,SceneKey.Negotiation2,SceneKey.Negotiation3][data.stageId];
       if (scene) finish(scene,{npcId:['landlord','store_owner_yang','ta_han','landlord'][data.stageId],returnTo:data.returnTo});
-    },()=>playUiClick(this),()=> { void poller?.refresh(); });
+    },()=>playUiClick(this),()=> { void poller?.refresh(); }, shownView => {
+      const key = shownView.outcome === 'success' ? 'result-win' : shownView.outcome === 'failure' ? 'result-fail' : null;
+      if (!key || !this.cache.audio.exists(key)) return;
+      resultSound = this.sound.add(key, { volume: gameSettings.ui, loop: false });
+      resultSound.play();
+    });
     const offline=()=>ui.setConnection('연결이 끊겼어요. 연결되면 같은 대화의 리포트를 다시 확인할게요.');
     const online=()=>ui.setConnection('연결됐어요. 리포트를 확인하고 있어요.');
     window.addEventListener('offline',offline); window.addEventListener('online',online);
     if (!navigator.onLine) offline();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN,()=>{
       active=false; poller?.stop(); ui.destroy();
+      resultSound?.destroy();
       window.removeEventListener('offline',offline); window.removeEventListener('online',online);
     });
     if (view.reportStatus==='ready' || view.reportStatus==='failed' || (view.styleReport && view.reportStatus!=='pending')) return;

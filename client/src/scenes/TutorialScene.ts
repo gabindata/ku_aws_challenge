@@ -11,11 +11,12 @@ type Phase = 'move' | 'trash' | 'enter' | 'inside' | 'bed' | 'transition' | 'pho
 // 원본 지도(1672 × 941)의 좌표. 쓰레기통과 문 앞에서 상호작용한다.
 const TRASH = { x: 1235, y: 340 };
 const DOOR = { x: 1373, y: 340 };
-// 너구리 몸통에 맞춰 현관 통로만 좌우 18px씩 넓힌다(원본 지도 기준).
+// 현관 양옆의 충돌영역을 늘려 통로를 좁힌다. 초기 보정 18px에서 10px로 축소.
 const TUTORIAL_BLOCKED_AREAS = BLOCKED_AREAS.map(area => {
-  if (area.name === 'north-east-center') return { ...area, width: area.width - 18 };
-  if (area.name === 'north-east') return { ...area, left: area.left + 18, width: area.width - 18 };
-  if (area.name === 'house-back') return { ...area, left: 1322, width: 103 };
+  if (area.name === 'north-east-center') return { ...area, width: area.width - 10 };
+  if (area.name === 'north-east') return { ...area, left: area.left + 10, width: area.width - 10 };
+  // 문턱(원본 지도 y=312) 위는 막아 너구리가 현관 앞에서 멈추게 한다.
+  if (area.name === 'house-back') return { ...area, left: 1330, width: 87, height: 312 };
   return area;
 });
 

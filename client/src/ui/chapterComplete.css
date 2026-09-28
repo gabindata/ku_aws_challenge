@@ -1,0 +1,5 @@
+.chapter-complete-overlay { position:fixed; inset:0; z-index:100001; background:#0009; display:flex; align-items:center; justify-content:center; }
+.chapter-complete-panel { position:relative; width:min(900px,92vw,135vh); }
+.chapter-complete-panel img { display:block; width:100%; height:auto; image-rendering:pixelated; }
+.chapter-complete-panel button { position:absolute; bottom:8%; left:50%; transform:translateX(-50%); padding:12px 40px; border:3px solid #819fba; border-radius:8px; background:#092050; color:white; font:bold clamp(16px,2.3vw,28px) Galmuri11,sans-serif; cursor:pointer; box-shadow:0 4px #6548b9; }
+.chapter-complete-panel button:focus-visible { outline:3px solid #ffbb32; outline-offset:4px; }

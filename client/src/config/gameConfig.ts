@@ -10,7 +10,6 @@ import { NegotiationScene1 } from '../scenes/NegotiationScene1';
 import { NegotiationScene2 } from '../scenes/NegotiationScene2';
 import { NegotiationScene3 } from '../scenes/NegotiationScene3';
 import { ResultScene } from '../scenes/ResultScene';
-import { StyleReportScene } from '../scenes/StyleReportScene';
 import { ConvenienceStoreScene } from '../scenes/ConvenienceStoreScene';
 import { DepartmentOfficeScene } from '../scenes/DepartmentOfficeScene';
 import { SchoolHallwayScene } from '../scenes/SchoolHallwayScene';
@@ -59,7 +58,6 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     SchoolHallwayScene,
     HouseScene,
     ResultScene,
-    StyleReportScene,
   ],
 };
 

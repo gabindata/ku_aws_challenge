@@ -207,7 +207,7 @@ export class StageSelectScene extends Phaser.Scene {
       this.timeOfDay.setGameMinutes(savedGameMinutes);
     }
 
-    this.registerTimeOfDayTestKeys();
+    if (import.meta.env.DEV) this.registerTimeOfDayTestKeys();
 
     // =========================
     // 플레이어 시작 위치 결정

@@ -5,7 +5,7 @@ import { playUiClick } from '../ui/UiFeedback';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import type { ReturnLocation } from '../types';
-import { VoiceInputManager } from '../systems/VoiceInputManager';
+import { VoiceInputManager, voiceInputErrorMessage } from '../systems/VoiceInputManager';
 import { DialogueBox } from '../ui/DialogueBox';
 import { MicButton } from '../ui/MicButton';
 import { TimerDisplay } from '../ui/TimerDisplay';
@@ -52,6 +52,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   private timerDisplay!: TimerDisplay;
   private remainingSeconds = 600;
+  private timerStatus: 'running' | 'paused' | 'disabled' = 'running';
   private resultPoller?: SessionResultPoller;
   private serverReady = false;
   private legacyResultApi = false;
@@ -91,6 +92,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.recording = false;
     this.latestResponse = null;
     this.remainingSeconds = 600;
+    this.timerStatus = 'running';
     this.sceneGeneration += 1;
 
     console.log('선택된 NPC:', this.npcId);
@@ -244,7 +246,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
       this.sessionId = response.sessionId;
       this.applyPresentation(response);
-      this.syncTimer(response.remainingSeconds ?? 600);
+      if (response.remainingSeconds !== null) this.syncTimer(response.remainingSeconds);
       this.startResultPolling();
       await this.playNpcLine(response.npcReply);
       if (generation !== this.sceneGeneration) return;
@@ -305,7 +307,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
    * 마이크 버튼 클릭 시 STT 시작
    */
   private startVoiceInput(): void {
-    if (!this.sessionId || !this.serverReady || this.speaking || this.recording || this.ended || this.turnBusy || this.pendingTurn || this.remainingSeconds <= 0) return;
+    if (!this.sessionId || !this.serverReady || this.speaking || this.recording || this.ended || this.turnBusy || this.pendingTurn || (this.timerStatus !== 'disabled' && this.remainingSeconds <= 0)) return;
     const generation = this.sceneGeneration;
     this.dialogueBox.setSpeaker('player');
     this.dialogueBox.showThinking();
@@ -373,7 +375,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
         this.dialogueBox.setSpeaker('system');
 
         this.dialogueBox.showText(
-          '음성을 제대로 인식하지 못했어요. 다시 한 번 말해 주세요.'
+          voiceInputErrorMessage(error)
         );
 
         this.micButton.setRecording(false);
@@ -414,6 +416,8 @@ export class BaseNegotiationScene extends Phaser.Scene {
   }
 
   private applyPresentation(response: TurnResponse): void {
+    this.timerStatus = response.timerStatus;
+    this.timerDisplay.configure(response.timerStatus, response.timerWarningSeconds);
     this.agreementPanel.update(response.agreementMemo);
     void this.expressionController.setExpression(response.expressionKey);
   }
@@ -484,7 +488,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   private updateInputState(): void {
     this.micButton.setDisabled(!!this.settingsPanel || !!this.exitDialog || !this.sessionId || !this.serverReady || this.speaking ||
-      this.recording || this.ended || this.turnBusy || this.pendingTurn !== null || this.remainingSeconds <= 0);
+      this.recording || this.ended || this.turnBusy || this.pendingTurn !== null || (this.timerStatus !== 'disabled' && this.remainingSeconds <= 0));
   }
 
   private startResultPolling(): void {
@@ -581,6 +585,10 @@ export class BaseNegotiationScene extends Phaser.Scene {
         ? await pauseSession(this.sessionId)
         : await resumeSession(this.sessionId);
       if (generation !== this.sceneGeneration) return;
+      if (this.timerStatus !== 'disabled') {
+        this.timerStatus = paused ? 'paused' : 'running';
+        this.timerDisplay.setStatus(this.timerStatus);
+      }
       if (result.remainingSeconds !== null) this.syncTimer(result.remainingSeconds);
       // 서버가 이미 끝낸 세션이면 결과 화면으로 넘긴다.
       if (result.sessionStatus === 'ended' && result.view) this.finishNegotiation(result.view);
@@ -593,18 +601,18 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   private syncTimer(seconds: number): void {
     this.displayDeadline = performance.now() + Math.max(0, seconds) * 1000;
-    this.remainingSeconds = Math.min(600, Math.max(0, seconds));
+    this.remainingSeconds = Math.max(0, seconds);
     this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
   }
 
   update(): void {
-    if (!this.legacyResultApi || this.ended || !this.displayDeadline) return;
+    if (!this.legacyResultApi || this.ended || !this.displayDeadline || this.timerStatus === 'disabled') return;
     // 서버가 멈춘 동안에는 표시도 멈춘다. 재개하면 응답으로 다시 맞춰진다.
-    if (this.paused) {
+    if (this.paused || this.timerStatus === 'paused') {
       this.displayDeadline = performance.now() + this.remainingSeconds * 1000;
       return;
     }
-    this.remainingSeconds = Math.min(600, Math.max(0, Math.ceil((this.displayDeadline - performance.now()) / 1000)));
+    this.remainingSeconds = Math.max(0, Math.ceil((this.displayDeadline - performance.now()) / 1000));
     this.timerDisplay.setRemainingSeconds(this.remainingSeconds);
     if (this.remainingSeconds <= 0 && !this.turnBusy && !this.timeoutRequest && performance.now() >= this.nextTimeoutCheck) {
       void this.collectTimeoutResult();

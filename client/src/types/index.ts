@@ -14,7 +14,6 @@ export const SceneKey = {
   Negotiation2: 'NegotiationScene2',
   Negotiation3: 'NegotiationScene3',
   Result: 'ResultScene',
-  StyleReport: 'StyleReportScene',
   ConvenienceStore: 'ConvenienceStore',
   DepartmentOffice: 'DepartmentOffice',
   House: 'HouseScene',

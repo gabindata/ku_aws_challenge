@@ -17,7 +17,6 @@ export function installSceneBgm(game: Phaser.Game): void {
     [SceneKey.Negotiation2]: 'stage-bgm',
     [SceneKey.Negotiation3]: 'stage-bgm',
     [SceneKey.Result]: 'stage-bgm',
-    [SceneKey.StyleReport]: 'stage-bgm',
   };
   // 씬 전환 중에도 게임 전체의 업데이트에서 음량 페이드를 이어간다.
   const fadeMs = 900;

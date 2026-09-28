@@ -1,3 +1,17 @@
+export function voiceInputErrorMessage(error: unknown): string {
+  const code = typeof error === 'object' && error !== null && 'error' in error ? String(error.error) : '';
+  const messages: Record<string, string> = {
+    'not-allowed': '마이크 권한이 차단돼 있어요. 주소창의 사이트 설정에서 마이크를 허용해 주세요.',
+    'service-not-allowed': '브라우저에서 음성 인식 사용이 차단돼 있어요. 브라우저 설정을 확인해 주세요.',
+    'audio-capture': '마이크를 찾을 수 없어요. 연결 상태와 입력 장치를 확인해 주세요.',
+    'network': '음성 인식 서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 말해 주세요.',
+    'no-speech': '말소리가 들리지 않았어요. 마이크 가까이에서 다시 말해 주세요.',
+    'unsupported': '이 브라우저는 음성 인식을 지원하지 않아요. Chrome에서 게임을 열어 주세요.',
+    'aborted': '음성 인식이 중단됐어요. 말하기 버튼을 다시 눌러 주세요.',
+  };
+  return messages[code] ?? '음성을 인식하지 못했어요. 설정의 마이크 테스트를 확인하고 다시 말해 주세요.';
+}
+
 /**
  * 마이크 캡처 + STT.
  * Web Speech API 고정, 크롬 기준으로만 검증한다.
@@ -41,7 +55,7 @@ export class VoiceInputManager {
       );
 
       console.error(error);
-      onError?.(error);
+      onError?.({ error: 'unsupported' });
 
       return;
     }

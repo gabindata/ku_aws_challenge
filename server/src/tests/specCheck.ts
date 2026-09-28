@@ -148,6 +148,17 @@ async function persona(): Promise<void> {
   ok('튜토리얼에 기획 지정 마무리 대사',
     getStage(0)!.persona?.closing?.onSuccess === '딱 일주일이야. 이번에는 연락 피하지 말고.');
 
+  // 욕설은 대상을 가리지 않고 치명적 행동이다. 짜증 표현은 아니다
+  const rules = buildJudgeSystem(getStage(3)!);
+  ok('욕설은 대상을 안 가림', rules.includes('누구를 향했는지 가리지 않는다'));
+  ok('  혼잣말 욕설도 포함', rules.includes('혼잣말이나 감탄으로 내뱉은'));
+  ok('  짜증 표현은 제외', rules.includes('욕설이 아닌 짜증 표현은 아니다'));
+  ok('  거친 말투만으로는 아님', rules.includes('말투가 거칠다는 이유만으로'));
+
+  // 튜토리얼만 되돌리고 나머지는 바로 실패다
+  ok('튜토리얼만 fatalRecovery', loadAllStages()
+    .filter((st) => st.fatalRecovery === true).map((st) => st.stageId).join() === '0');
+
   // 페르소나는 대사용이다. 브라우저로 나가면 안 된다.
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('페르소나 시나리오 시작', false);

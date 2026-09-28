@@ -29,13 +29,12 @@ export class MainMenuScene extends Phaser.Scene {
 
     // 튜토리얼 버튼
     this.createMenuButton(width / 2, 690, '튜토리얼', () => {
-      if (this.hasSeenTutorial()) this.showTutorialRequiredPopup(true);
-      else this.scene.start(SceneKey.Tutorial, { finishedNegotiation: false, completionLines: [] });
+      this.scene.start(SceneKey.Tutorial, { finishedNegotiation: false, completionLines: [] });
     });
 
     // 시작하기 버튼
     this.createMenuButton(width / 2, 810, '시작하기', () => {
-      if (this.hasSeenTutorial()) {
+      if (this.hasCompletedTutorial()) {
         this.scene.start(SceneKey.StageSelect);
       } else {
         this.showTutorialRequiredPopup();
@@ -46,15 +45,13 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
 
-  private hasSeenTutorial(): boolean {
-    if (this.registry.get('tutorialSeen') === true || this.registry.get('tutorialCompleted') === true) return true;
-    try {
-      return localStorage.getItem('tutorialSeen') === 'true'
-        || localStorage.getItem('tutorialCompleted') === 'true';
-    } catch { return false; }
+  private hasCompletedTutorial(): boolean {
+    if (this.registry.get('tutorialReportShown') === true) return true;
+    try { return localStorage.getItem('tutorialReportShown') === 'true'; }
+    catch { return false; }
   }
 
-  private showTutorialRequiredPopup(replay = false): void {
+  private showTutorialRequiredPopup(): void {
     const { width, height } = this.scale;
 
     const overlay = this.add
@@ -74,7 +71,7 @@ export class MainMenuScene extends Phaser.Scene {
       .text(
         width / 2,
         height / 2 - 55,
-        replay ? '튜토리얼을 다시 보겠습니까?' : '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
+        '튜토리얼을 아직 완료하지 않았습니다.\n먼저 보고 오시겠습니까?',
         {
           fontSize: '28px',
           color: '#ffffff',
@@ -84,6 +81,16 @@ export class MainMenuScene extends Phaser.Scene {
         }
       )
       .setOrigin(0.5);
+
+    const tutorialNote = this.add.text(
+      width / 2,
+      message.getBounds().bottom + 12,
+      '(튜토리얼을 보지 않으면 스토리 진행에 어려움이 있습니다.)',
+      {
+        fontFamily: 'Galmuri11', fontSize: '18px', color: '#dce3eb',
+        align: 'center', wordWrap: { width: 590 },
+      }
+    ).setOrigin(0.5, 0);
 
     const yesButton = this.add
       .text(
@@ -129,6 +136,7 @@ export class MainMenuScene extends Phaser.Scene {
       overlay.destroy();
       popup.destroy();
       message.destroy();
+      tutorialNote?.destroy();
       yesButton.destroy();
       noButton.destroy();
     };
@@ -142,7 +150,7 @@ export class MainMenuScene extends Phaser.Scene {
     noButton.on('pointerdown', () => {
       playUiClick(this);
       closePopup();
-      if (!replay) this.scene.start(SceneKey.StageSelect);
+      this.scene.start(SceneKey.StageSelect);
     });
   }
 

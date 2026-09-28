@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
@@ -383,6 +384,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
     // =========================
 
     if (nearExit && pressedF) {
+      playDoorEntry(this, 'store');
       this.scene.start(SceneKey.StageSelect, {
         spawnAt: 'store',
       });

@@ -7,3 +7,11 @@ export function playUiClick(scene: Phaser.Scene): void {
     scene.sound.play('button-click', { volume: gameSettings.ui });
   }
 }
+
+/** 문을 통해 들어가거나 나갈 때 재생한다. 씬 전환 후에도 끝까지 재생된다. */
+export function playDoorEntry(scene: Phaser.Scene, place: 'store' | 'house' | 'school'): void {
+  const key = `door-entry-${place}`;
+  if (scene.cache.audio.exists(key)) {
+    scene.sound.play(key, { volume: gameSettings.ui, loop: false });
+  }
+}

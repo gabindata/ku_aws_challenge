@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 import { getQuests } from '../systems/NegotiationProgress';
 import { showChapterComplete } from '../ui/ChapterCompletePanel';
 import { QuestPanel } from '../ui/QuestPanel';
@@ -418,6 +419,7 @@ export class StageSelectScene extends Phaser.Scene {
       switch (this.nearbyNpcId) {
         // 편의점
         case 'store_owner_yang':
+          playDoorEntry(this, 'store');
           this.scene.start(
             SceneKey.ConvenienceStore,
             {
@@ -428,6 +430,7 @@ export class StageSelectScene extends Phaser.Scene {
 
         // 학교 건물 → 학교 복도
         case 'ta_han':
+          playDoorEntry(this, 'school');
           this.scene.start(
             SceneKey.SchoolHallway,
             {
@@ -438,6 +441,7 @@ export class StageSelectScene extends Phaser.Scene {
           break;
 
         case 'house':
+          playDoorEntry(this, 'house');
           this.scene.start(SceneKey.House, { returnTo: {
             scene: SceneKey.StageSelect,
             position: { x: this.player.x / this.scale.width, y: this.player.y / this.scale.height },

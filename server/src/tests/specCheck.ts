@@ -152,7 +152,12 @@ async function persona(): Promise<void> {
   const rules = buildJudgeSystem(getStage(3)!);
   ok('욕설은 대상을 안 가림', rules.includes('누구를 향했는지 가리지 않는다'));
   ok('  혼잣말 욕설도 포함', rules.includes('혼잣말이나 감탄으로 내뱉은'));
-  ok('  짜증 표현은 제외', rules.includes('욕설이 아닌 짜증 표현은 아니다'));
+  ok('  내치는 말도 포함', rules.includes('상대를 쫓아내는 말'));
+  ok('  낮잡는 호칭도 포함', rules.includes('상대를 낮잡는 호칭이나 인격 비하'));
+  ok('  거절은 제외', rules.includes('요구를 거절함'));
+  ok('  짜증은 제외', rules.includes('짜증이나 답답함'));
+  ok('  대화 종료 의사는 제외', rules.includes('대화를 끝내자는 뜻'));
+  ok('  구분 기준을 제시', rules.includes('상대를 물리치려 하는가'));
   ok('  거친 말투만으로는 아님', rules.includes('말투가 거칠다는 이유만으로'));
 
   // 튜토리얼만 되돌리고 나머지는 바로 실패다

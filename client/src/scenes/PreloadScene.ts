@@ -1,3 +1,4 @@
+import { ResourceLoadingScreen } from '../ui/ResourceLoadingScreen';
 
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
@@ -5,11 +6,13 @@ import { preloadNpcExpressions } from '../systems/NpcExpressionController';
 
 /** NPC 초상화·배경·효과음 로드. */
 export class PreloadScene extends Phaser.Scene {
+  private resourceLoading?: ResourceLoadingScreen;
   constructor() {
     super(SceneKey.Preload);
   }
 
   preload(): void {
+    this.resourceLoading = new ResourceLoadingScreen(this);
     preloadNpcExpressions(this);
     for (const key of ['stage-info-panel', 'common-panel', 'mic-button', 'settings-button', 'dialogue-nameplate', 'dialogue-box']) {
       this.load.image(key, `assets/images/ui/${key}.png`);
@@ -215,6 +218,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (this.resourceLoading && !this.resourceLoading.finish()) return;
     // 사람 캐릭터 걷기 애니메이션 등록
     this.createPlayerAnimations();
 

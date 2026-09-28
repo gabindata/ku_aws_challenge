@@ -39,7 +39,7 @@ export class HouseScene extends Phaser.Scene {
     });
     let debug = false;
     const toggleDebug = () => { debug = !debug; blockers.forEach(b => b.setAlpha(debug ? 0.35 : 0)); };
-    this.input.keyboard!.on('keydown-C', toggleDebug);
+    if (import.meta.env.DEV) this.input.keyboard!.on('keydown-C', toggleDebug);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-C', toggleDebug));
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F);
     this.exitZone = this.add.zone(width * 0.50, height * 0.80, width * 0.17, height * 0.10);

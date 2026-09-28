@@ -1,3 +1,4 @@
+import { ResourceLoadingScreen } from '../ui/ResourceLoadingScreen';
 import { StageInfoPanel } from '../ui/StageInfoPanel';
 import { TutorialPhone } from '../ui/TutorialPhone';
 import { BLOCKED_AREAS, SOURCE_MAP_WIDTH, SOURCE_MAP_HEIGHT } from '../config/townMap';
@@ -20,6 +21,7 @@ const TUTORIAL_BLOCKED_AREAS = BLOCKED_AREAS.map(area => {
 
 /** 골목 탐색과 어두운 원룸의 휴대폰 확인과 노크 소리까지 진행한다. 튜토리얼 완료/해금은 처리하지 않는다. */
 export class TutorialScene extends Phaser.Scene {
+  private resourceLoading?: ResourceLoadingScreen;
   private finishedNegotiation = false;
   private completionLines: string[] = [];
   private stageInfo?: StageInfoPanel;
@@ -61,6 +63,7 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.resourceLoading = new ResourceLoadingScreen(this);
     for (const page of ['home', 'memo', 'messages', 'close-button']) {
       this.load.image(`tutorial-phone-${page}`, `assets/images/tutorial/tutorial-phone-${page}.png`);
     }
@@ -80,6 +83,7 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (this.resourceLoading && !this.resourceLoading.finish()) return;
     const { width, height } = this.scale;
     this.facing = 'down';
     for (const direction of ['up', 'down', 'left', 'right']) {
@@ -405,6 +409,7 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (!this.player?.active || !this.keys) return;
     const pressed = Phaser.Input.Keyboard.JustDown(this.keys.F);
     if (this.stageInfo?.isOpen) { this.stopMoving(); this.prompt.setVisible(false); return; }
     if (this.speaking) {

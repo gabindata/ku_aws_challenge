@@ -13,7 +13,10 @@ export class ResultReportView {
   private loading = el('section','','report-generating');
   private notice = el('p', '', 'connection');
   private signature = '';
-  constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void) {
+  private delayTimer?: ReturnType<typeof setTimeout>;
+  private recovery = el('div', '', 'actions');
+  private delayNote = el('p', '생성이 지연되고 있어요. 다시 조회하거나 나갈 수 있어요.');
+  constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void, onRefresh: () => void = () => {}) {
     this.root.tabIndex = -1;
     this.root.setAttribute('aria-label','협상 결과 리포트');
     const page = this.page;
@@ -23,7 +26,14 @@ export class ResultReportView {
     const dots = el('div', '', 'report-loading-dots');
     dots.setAttribute('aria-hidden', 'true');
     for (let i = 0; i < 3; i++) dots.append(el('span', '●'));
-    this.loading.append(dots);
+    this.recovery.hidden = true;
+    this.delayNote.hidden = true;
+    for (const [text, action] of [['다시 조회', onRefresh], ['나가기', onExit]] as const) {
+      const button = el('button', text); button.type = 'button';
+      button.onclick = () => { onButtonClick(); action(); };
+      this.recovery.append(button);
+    }
+    this.loading.append(dots, this.delayNote, this.recovery);
     page.append(el('p',stageId === 0 ? '튜토리얼 · 대화 기록' : `STAGE ${stageId} · 대화 기록`,'eyebrow'));
     const hero = el('section','','card hero');
     const success = view.outcome === 'success';
@@ -68,6 +78,14 @@ export class ResultReportView {
     this.loading.hidden = !pending;
     this.page.hidden = pending;
     this.root.setAttribute('aria-busy', String(pending));
+    if (pending && !this.delayTimer) {
+      this.delayTimer = setTimeout(() => {
+        this.delayNote.hidden = false; this.recovery.hidden = false;
+      }, 20000);
+    } else if (!pending) {
+      clearTimeout(this.delayTimer); this.delayTimer = undefined;
+      this.delayNote.hidden = true; this.recovery.hidden = true;
+    }
     if (pending) {
       const s=this.section('대화를 분석하고 있어요','loading'); s.setAttribute('role','status');
       s.append(el('p','결과는 확정됐어요. 말투 리포트를 준비하고 있어요.'));
@@ -101,5 +119,5 @@ export class ResultReportView {
     }
     this.root.scrollTop=scroll;
   }
-  destroy(): void { this.root.remove(); }
+  destroy(): void { clearTimeout(this.delayTimer); this.root.remove(); }
 }

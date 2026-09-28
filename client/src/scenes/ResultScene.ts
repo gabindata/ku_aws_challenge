@@ -32,7 +32,7 @@ export class ResultScene extends Phaser.Scene {
     },()=>{
       const scene=[SceneKey.TutorialNegotiation,SceneKey.Negotiation1,SceneKey.Negotiation2,SceneKey.Negotiation3][data.stageId];
       if (scene) finish(scene,{npcId:['landlord','store_owner_yang','ta_han','landlord'][data.stageId],returnTo:data.returnTo});
-    },()=>playUiClick(this));
+    },()=>playUiClick(this),()=> { void poller?.refresh(); });
     const offline=()=>ui.setConnection('연결이 끊겼어요. 연결되면 같은 대화의 리포트를 다시 확인할게요.');
     const online=()=>ui.setConnection('연결됐어요. 리포트를 확인하고 있어요.');
     window.addEventListener('offline',offline); window.addEventListener('online',online);

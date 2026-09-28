@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 /** 협상 화면의 남은 시간 표시 UI */
 export class TimerDisplay extends Phaser.GameObjects.Container {
+  private warnings: number[] = [];
   private labelText: Phaser.GameObjects.Text;
   private timeText: Phaser.GameObjects.Text;
 
@@ -68,18 +69,17 @@ export class TimerDisplay extends Phaser.GameObjects.Container {
 
     this.timeText.setText(formatted);
 
-    // 30초 이하
-    if (safeSeconds <= 30) {
-      this.timeText.setColor('#ff5555');
-      return;
-    }
+    const crossed = this.warnings.filter(value => safeSeconds <= value);
+    this.timeText.setColor(crossed.length > 1 ? '#ff5555' : crossed.length ? '#ffcc55' : '#ffffff');
+  }
 
-    // 2분 이하
-    if (safeSeconds <= 120) {
-      this.timeText.setColor('#ffcc55');
-      return;
-    }
+  configure(status: 'running' | 'paused' | 'disabled', warnings: number[]): void {
+    this.warnings = [...new Set(warnings.filter(n => Number.isFinite(n) && n >= 0))];
+    this.setStatus(status);
+  }
 
-    this.timeText.setColor('#ffffff');
+  setStatus(status: 'running' | 'paused' | 'disabled'): void {
+    this.setVisible(status !== 'disabled');
+    this.labelText.setText(status === 'paused' ? '일시 정지' : '남은 시간');
   }
 }

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { playUiClick } from './UiFeedback';
 
 /** 이미지 마이크 버튼. 입력 잠금 및 녹음 상태는 기존 협상 흐름을 따른다. */
 export class MicButton extends Phaser.GameObjects.Container {
@@ -16,7 +15,6 @@ export class MicButton extends Phaser.GameObjects.Container {
     }).setOrigin(0.5, 0);
     this.icon.on('pointerdown', () => {
       if (this.isDisabled) return;
-      playUiClick(scene);
       onClick();
     });
     this.add([this.icon, this.label]);

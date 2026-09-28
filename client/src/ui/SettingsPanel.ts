@@ -32,7 +32,10 @@ export class SettingsPanel {
     this.inputEnabled = scene.input.enabled;
     scene.input.enabled = false;
     this.keyboardEnabled = scene.input.keyboard?.enabled ?? false;
-    if (scene.input.keyboard) scene.input.keyboard.enabled = false;
+    if (scene.input.keyboard) {
+      scene.input.keyboard.resetKeys();
+      scene.input.keyboard.enabled = false;
+    }
     this.root.className = 'game-settings-overlay';
     // DOM 슬라이더의 기본 동작은 유지하고 Phaser 전역 입력으로의 전파만 차단한다.
     for (const type of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'mousemove', 'touchstart', 'touchend', 'touchmove', 'click', 'wheel']) {
@@ -116,7 +119,10 @@ export class SettingsPanel {
     this.closed = true; this.stopMic(); this.root.remove();
     this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.close, this);
     this.scene.input.enabled = this.inputEnabled;
-    if (this.scene.input.keyboard) this.scene.input.keyboard.enabled = this.keyboardEnabled;
+    if (this.scene.input.keyboard) {
+      this.scene.input.keyboard.resetKeys();
+      this.scene.input.keyboard.enabled = this.keyboardEnabled;
+    }
     this.previousFocus?.focus(); this.onClose();
   }
 }

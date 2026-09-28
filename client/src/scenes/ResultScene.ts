@@ -12,7 +12,7 @@ export class ResultScene extends Phaser.Scene {
   create(data: { sessionId: string; stageId: number; view: ClientNegotiationView; returnTo?: ReturnLocation }): void {
     let active=true;
     let poller: SessionResultPoller | undefined;
-    const view=data.view;
+    let view=data.view;
     if (data.stageId === 0 && view.outcome === 'success') {
       this.registry.set('tutorialCompleted', true);
       try { localStorage.setItem('tutorialCompleted', 'true'); } catch { /* 현재 실행에는 반영 */ }
@@ -22,7 +22,9 @@ export class ResultScene extends Phaser.Scene {
       active=false; poller?.stop(); this.scene.start(scene,payload);
     };
     const ui=new ResultReportView(view,data.stageId,()=>{
-      if (data.stageId === 0) {
+      if (data.stageId === 0 && view.outcome === 'success') {
+        finish(SceneKey.Tutorial, { finishedNegotiation: true, completionLines: [] });
+      } else if (data.stageId === 0) {
         finish(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } });
       } else if (data.returnTo) {
         finish(data.returnTo.scene, { returnPosition: data.returnTo.position });
@@ -46,7 +48,8 @@ export class ResultScene extends Phaser.Scene {
       if (!active || result.sessionId!==data.sessionId || result.stageId!==data.stageId) return;
       ui.setConnection('');
       if (!result.view) return;
-      ui.update(result.view);
+      view = result.view;
+      ui.update(view);
       if (result.view.reportStatus==='ready' || result.view.reportStatus==='failed') poller?.stop();
     },error=>{
       if (!active) return;

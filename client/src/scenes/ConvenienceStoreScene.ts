@@ -295,7 +295,7 @@ export class ConvenienceStoreScene extends Phaser.Scene {
     this.stageInfoPanel = new StageInfoPanel(this, {
       stageTitle: '스테이지 1 · 편의점',
       npcName: '양점장',
-      description: `난이도: Easy
+      description: `난이도: Hard
 
 배경
 집주인에게 일주일의 유예를 얻었지만 수입이 필요하다. 편의점 구인 전단지를 보고 경력 없이 면접을 보러 왔다.

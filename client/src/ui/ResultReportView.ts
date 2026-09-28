@@ -22,7 +22,7 @@ export class ResultReportView {
     const page = this.page;
     this.loading.setAttribute('role', 'status');
     this.loading.setAttribute('aria-live', 'polite');
-    this.loading.append(el('h1', '생성 중'), el('p', '결과 리포트를 만들고 있어요. 잠시만 기다려 주세요.'), el('p', '나가지 마세요.'));
+    this.loading.append(el('h1', '생성 중'), el('p', '결과 리포트를 만들고 있어요. 잠시만 기다려 주세요.'));
     const dots = el('div', '', 'report-loading-dots');
     dots.setAttribute('aria-hidden', 'true');
     for (let i = 0; i < 3; i++) dots.append(el('span', '●'));

@@ -215,6 +215,9 @@ export class PreloadScene extends Phaser.Scene {
     );
     this.load.audio('tutorial-bgm', '/assets/audio/Tutorial.mp3');
     this.load.audio('stage-bgm', '/assets/audio/Stage.mp3');
+    this.load.audio('door-entry-store', '/assets/audio/conveniencestorering.mp3');
+    this.load.audio('door-entry-house', '/assets/audio/houseopening.mp3');
+    this.load.audio('door-entry-school', '/assets/audio/schoolopening.mp3');
     this.load.audio('result-win', '/assets/audio/win.mp3');
     this.load.audio('result-fail', '/assets/audio/fail.mp3');
   }

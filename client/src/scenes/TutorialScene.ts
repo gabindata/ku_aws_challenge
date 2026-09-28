@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 import { ResourceLoadingScreen } from '../ui/ResourceLoadingScreen';
 import { StageInfoPanel } from '../ui/StageInfoPanel';
 import { TutorialPhone } from '../ui/TutorialPhone';
@@ -138,8 +139,6 @@ export class TutorialScene extends Phaser.Scene {
       this.phase = 'move';
       if (this.finishedNegotiation) {
         this.phase = 'complete';
-        this.registry.set('tutorialCompleted', true);
-        try { localStorage.setItem('tutorialCompleted', 'true'); } catch {}
         const finish = () => {
           this.showGuide('이제 튜토리얼이 완료되었습니다. 스테이지를 클리어하며 게임을 진행해보세요.');
           this.time.delayedCall(4500, () => this.scene.start(SceneKey.StageSelect, { returnPosition: { x: 1373 / 1672, y: 380 / 941 } }));
@@ -164,6 +163,7 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   private enterRoom(): void {
+    playDoorEntry(this, 'house');
     const { width, height } = this.scale;
     this.phase = 'inside';
     this.stopMoving();

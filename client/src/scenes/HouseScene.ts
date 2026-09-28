@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import type { ReturnLocation } from '../types';
@@ -59,6 +60,7 @@ export class HouseScene extends Phaser.Scene {
   }
 
   private leaveHouse(): void {
+    playDoorEntry(this, 'house');
     this.scene.start(this.returnTo?.scene ?? SceneKey.StageSelect, {
       returnPosition: this.returnTo?.position ?? { x: 1373 / 1672, y: 370 / 941 },
     });

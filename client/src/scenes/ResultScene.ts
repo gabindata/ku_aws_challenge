@@ -15,10 +15,6 @@ export class ResultScene extends Phaser.Scene {
     let resultSound: Phaser.Sound.BaseSound | undefined;
     let poller: SessionResultPoller | undefined;
     let view=data.view;
-    if (data.stageId === 0 && view.outcome === 'success') {
-      this.registry.set('tutorialCompleted', true);
-      try { localStorage.setItem('tutorialCompleted', 'true'); } catch { /* 현재 실행에는 반영 */ }
-    }
     const finish=(scene: string, payload: object) => {
       if (!active) return;
       active=false; poller?.stop(); this.scene.start(scene,payload);
@@ -38,6 +34,16 @@ export class ResultScene extends Phaser.Scene {
       const scene=[SceneKey.TutorialNegotiation,SceneKey.Negotiation1,SceneKey.Negotiation2,SceneKey.Negotiation3][data.stageId];
       if (scene) finish(scene,{npcId:['landlord','store_owner_yang','ta_han','landlord'][data.stageId],returnTo:data.returnTo});
     },()=>playUiClick(this),()=> { void poller?.refresh(); }, shownView => {
+      // 로딩 화면이 아닌 실제 결과 리포트를 표시한 뒤 완료 처리한다.
+      if (data.stageId === 0 && (shownView.outcome === 'success' || shownView.outcome === 'failure')) {
+        this.registry.set('tutorialReportShown', true);
+        this.registry.set('tutorialCompleted', true);
+        try {
+          localStorage.setItem('tutorialReportShown', 'true');
+          localStorage.setItem('tutorialCompleted', 'true');
+        } catch { /* 저장 제한 시 현재 실행에는 반영 */ }
+      }
+
       const key = shownView.outcome === 'success' ? 'result-win' : shownView.outcome === 'failure' ? 'result-fail' : null;
       if (!key || !this.cache.audio.exists(key)) return;
       resultSound = this.sound.add(key, { volume: gameSettings.ui, loop: false });

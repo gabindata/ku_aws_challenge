@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
 import { Player } from '../entities/Player';
@@ -475,6 +476,7 @@ export class DepartmentOfficeScene extends Phaser.Scene {
     // =========================
 
     if (nearExit && pressedF) {
+      playDoorEntry(this, 'house');
       this.scene.start(SceneKey.SchoolHallway, {
         spawnAt: 'office',
       });

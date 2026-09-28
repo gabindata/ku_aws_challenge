@@ -1,3 +1,4 @@
+import { playDoorEntry } from '../ui/UiFeedback';
 
 import Phaser from 'phaser';
 import { SceneKey } from '../types';
@@ -377,6 +378,7 @@ export class SchoolHallwayScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
       // 왼쪽 문 → 학과 사무실
       if (nearOffice) {
+        playDoorEntry(this, 'house');
         this.scene.start(SceneKey.DepartmentOffice, {
           npcId: 'ta_han',
         });
@@ -386,6 +388,7 @@ export class SchoolHallwayScene extends Phaser.Scene {
 
       // 위쪽 유리문 → 스테이지 선택 화면
       if (nearExit) {
+        playDoorEntry(this, 'school');
         this.scene.start(SceneKey.StageSelect, {
           spawnAt: 'school',
         });

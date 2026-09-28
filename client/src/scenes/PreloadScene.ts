@@ -215,6 +215,8 @@ export class PreloadScene extends Phaser.Scene {
     );
     this.load.audio('tutorial-bgm', '/assets/audio/Tutorial.mp3');
     this.load.audio('stage-bgm', '/assets/audio/Stage.mp3');
+    this.load.audio('result-win', '/assets/audio/win.mp3');
+    this.load.audio('result-fail', '/assets/audio/fail.mp3');
   }
 
   create(): void {

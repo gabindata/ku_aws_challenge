@@ -13,10 +13,11 @@ export class ResultReportView {
   private loading = el('section','','report-generating');
   private notice = el('p', '', 'connection');
   private signature = '';
+  private resultAnnounced = false;
   private delayTimer?: ReturnType<typeof setTimeout>;
   private recovery = el('div', '', 'actions');
   private delayNote = el('p', '생성이 지연되고 있어요. 다시 조회하거나 나갈 수 있어요.');
-  constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void, onRefresh: () => void = () => {}) {
+  constructor(view: ClientNegotiationView, stageId: number, onExit: () => void, onRetry: () => void, onButtonClick: () => void, onRefresh: () => void = () => {}, private onResultShown: (view: ClientNegotiationView) => void = () => {}) {
     this.root.tabIndex = -1;
     this.root.setAttribute('aria-label','협상 결과 리포트');
     const page = this.page;
@@ -118,6 +119,10 @@ export class ResultReportView {
       }
     }
     this.root.scrollTop=scroll;
+    if (!pending && !this.resultAnnounced) {
+      this.resultAnnounced = true;
+      this.onResultShown(view);
+    }
   }
   destroy(): void { clearTimeout(this.delayTimer); this.root.remove(); }
 }

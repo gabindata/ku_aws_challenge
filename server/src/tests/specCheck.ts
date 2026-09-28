@@ -134,6 +134,20 @@ async function persona(): Promise<void> {
     ok(`스테이지 ${stage.stageId} 마무리 대사가 프롬프트에`, system.includes(p.closing!.nearLimit));
   }
 
+  // 성공으로 끝나는 턴의 대사가 이어질 말이면 결과 화면이 뚝 끊긴 것처럼 보인다
+  for (const stage of loadAllStages()) {
+    const system = buildJudgeSystem(stage);
+    ok(`스테이지 ${stage.stageId} 마무리 지시가 프롬프트에`, system.includes('대화를 닫는 대사'));
+    ok(`  새로 묻지 말라고 지시`, system.includes('새로 묻지 않는다'));
+    ok(`  성공 선언은 막음`, system.includes('성공했다고 선언하지 않는다'));
+    const onSuccess = stage.persona?.closing?.onSuccess;
+    if (onSuccess) {
+      ok(`  스테이지 ${stage.stageId} 지정 마무리 대사가 프롬프트에`, system.includes(onSuccess));
+    }
+  }
+  ok('튜토리얼에 기획 지정 마무리 대사',
+    getStage(0)!.persona?.closing?.onSuccess === '딱 일주일이야. 이번에는 연락 피하지 말고.');
+
   // 페르소나는 대사용이다. 브라우저로 나가면 안 된다.
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('페르소나 시나리오 시작', false);

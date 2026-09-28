@@ -71,6 +71,17 @@ const RULES = `당신은 한국어 협상 게임의 NPC이자 판정자입니다
 - 이번 대사에서 실제로 안내·변경·철회한 항목만 넣는다. 변화가 없으면 빈 배열이다
 - 안내했다는 이유로 합의를 성립시키지 않는다
 
+## 대화를 끝맺기
+이번 판정으로 **필수 합의가 모두 채워지면** 대화가 여기서 끝난다.
+그때의 npcReply는 이어질 말이 아니라 **대화를 닫는 대사**여야 한다.
+
+- 합의한 내용을 한 번 복창하고, 헤어지는 말로 맺는다
+- 새로 묻지 않는다. 다음 화제를 꺼내지 않는다
+- 성공했다고 선언하지 않는다. 결과는 서버가 정하고 화면이 따로 알린다
+- 아래 「마무리 대사」에 성공 시 지정 문장이 있으면 그것을 쓴다
+
+아직 못 채운 필수 키가 하나라도 남았으면 평소대로 대화를 이어간다.
+
 ## 종료 신호
 - stageVerdict는 참고 신호다. 성공 여부는 서버가 키 상태로 정한다
 - fatal은 아래만 해당한다
@@ -123,6 +134,9 @@ function personaText(stage: StageDefinition): string {
           : null,
         p.closing.finalCallByOutcome
           ? `- 마지막 호출(finalCall), 하나라도 미충족이면: ${p.closing.finalCallByOutcome.unmet}`
+          : null,
+        p.closing.onSuccess
+          ? `- 이번 판정으로 필수 합의가 모두 채워질 때: ${p.closing.onSuccess}`
           : null,
       ].filter(Boolean).join('\n')
     : '';

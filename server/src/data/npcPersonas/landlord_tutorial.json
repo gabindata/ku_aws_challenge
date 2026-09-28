@@ -52,7 +52,8 @@
     ],
     "closing": {
       "nearLimit": "말이 길어지네. 할 얘기만 해.",
-      "finalCall": "오늘 이야기는 여기까지 하자고."
+      "finalCall": "오늘 이야기는 여기까지 하자고.",
+      "onSuccess": "딱 일주일이야. 이번에는 연락 피하지 말고."
     }
   },
   "difficulty": "tutorial",

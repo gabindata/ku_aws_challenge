@@ -305,7 +305,7 @@ export class StageSelectScene extends Phaser.Scene {
     this.stageInfoPanel = new StageInfoPanel(this, {
       stageTitle: '스테이지 3 · 원룸 현관',
       npcName: '고금자',
-      description: `난이도: Hard
+      description: `난이도: Easy
 
 배경
 며칠 뒤 집주인이 다시 찾아왔다. 이번 용건은 집세가 아니라 더러운 방 상태이다.

@@ -5,8 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json && node scripts/copyAssets.mjs",
+    "start": "node dist/server/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "llm:smoke": "tsx src/scripts/llmSmoke.ts",
     "test": "tsx src/tests/specCheck.ts"

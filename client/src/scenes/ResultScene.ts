@@ -55,7 +55,7 @@ export class ResultScene extends Phaser.Scene {
         ui.update({ ...view, reportStatus: 'failed' });
         ui.setConnection('현재 서버는 리포트 추가 조회를 지원하지 않아요. 받은 협상 결과를 표시합니다.');
       } else if (error instanceof ApiError && error.missingSession) {
-        poller?.stop(); ui.setConnection('세션이 만료돼 리포트를 더 불러올 수 없어요. 협상 결과는 그대로 확인할 수 있어요.');
+        poller?.stop(); ui.update({ ...view, reportStatus: 'failed' }); ui.setConnection('세션이 만료돼 리포트를 더 불러올 수 없어요. 협상 결과는 그대로 확인할 수 있어요.');
       } else ui.setConnection('서버에 연결하지 못했어요. 같은 대화의 리포트를 다시 확인하고 있어요.');
     });
   }

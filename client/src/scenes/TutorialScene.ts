@@ -98,7 +98,7 @@ export class TutorialScene extends Phaser.Scene {
     this.phase = 'transition'; this.lines = []; this.afterDialogue = undefined; this.moved = 0;
     this.sx = width / SOURCE_MAP_WIDTH; this.sy = height / SOURCE_MAP_HEIGHT;
     this.background = this.add.image(width / 2, height / 2, 'tutorial-town').setDisplaySize(width, height);
-    this.player = this.physics.add.sprite(1190 * this.sx, 600 * this.sy, 'raccoon-down-idle').setDisplaySize(107, 107).setDepth(10).setCollideWorldBounds(true);
+    this.player = this.physics.add.sprite(1190 * this.sx, 600 * this.sy, 'raccoon-down-idle').setDisplaySize(75, 75).setDepth(10).setCollideWorldBounds(true);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     // 꼬리와 투명 여백을 제외한 몸통 중심의 충돌 영역.
     body.setSize(650, 520).setOffset(302, 390);

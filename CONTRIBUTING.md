@@ -63,17 +63,28 @@ OpenAI 쪽이다. 그래서 `openai` SDK로 부른다. 모델은 실제 ID가 �
 
 ## 배포
 
-서버 **Render**, 클라이언트 **Vercel**. 둘 다 레포 루트를 기준으로 빌드한다.
-`server/`나 `client/`를 Root Directory로 지정하면 `shared/`를 못 읽어 빌드가 깨진다.
+| | 주소 |
+|---|---|
+| 게임 | https://malkori.pages.dev (Cloudflare Pages) |
+| 서버 | https://malkori-server.onrender.com (Render) |
 
-| | Render (서버) | Vercel (클라이언트) |
+둘 다 **레포 루트를 기준으로** 빌드한다. `server/`나 `client/`를 Root Directory로
+지정하면 `shared/`를 못 읽어 빌드가 깨진다.
+
+| | Render (서버) | Cloudflare Pages (게임) |
 |---|---|---|
 | Root Directory | 비워 둔다 | 비워 둔다 |
 | Build | `cd server && npm ci && npm run build` | `cd client && npm ci && npm run build` |
 | Start · Output | `cd server && npm start` | `client/dist` |
 | 환경 변수 | `.env.example`의 값들 | `VITE_API_BASE_URL` |
 
-배포 뒤 서버의 `CLIENT_ORIGIN`에 게임 주소를 넣는다. 비워 두면 아무 데서나 부를 수 있다.
+`VITE_API_BASE_URL`은 **`/api`까지** 적는다. `https://malkori-server.onrender.com/api`
+
+서버의 `CLIENT_ORIGIN`에는 게임 주소를 넣는다. 비워 두면 아무 데서나 부를 수 있다.
+`CLIENT_ORIGIN=https://malkori.pages.dev`
+
+Render는 자동 배포가 꺼져 있다. 머지한 뒤 대시보드에서 **Manual Deploy**를 눌러야
+반영된다.
 
 세션이 메모리에만 있으므로 **서버 인스턴스는 하나여야 하고, 재배포하면 진행 중인
 세션이 전부 끊긴다.** 시연 직전에는 재배포하지 않는다.

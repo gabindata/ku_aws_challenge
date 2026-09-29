@@ -1,4 +1,4 @@
-# 말꼬리
+# Malkori(말꼬리)
 
 **말투를 돌려받는 음성 대화 연습 게임**
 
@@ -94,14 +94,6 @@ API 키 없이 화면과 흐름을 볼 수 있습니다. 실제 모델을 부르
 있습니다.
 
 음성 인식이 Web Speech API라 **크롬**에서 실행해야 합니다.
-
-## 문서
-
-| | |
-|---|---|
-| [`shared/types/negotiationTypes.ts`](shared/types/negotiationTypes.ts) | API 계약의 단일 소스 |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 팀 작업 규칙, 브랜치·PR, 배포 |
-| `server/.env.example` | 환경 변수 전체 설명 |
 
 ## 팀
 

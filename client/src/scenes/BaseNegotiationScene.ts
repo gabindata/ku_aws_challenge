@@ -1,3 +1,4 @@
+import { showTutorialRules } from '../ui/TutorialRulesPanel';
 import { getWorldState, saveRewards } from '../systems/NegotiationProgress';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { SessionResultPoller } from '../systems/SessionResultPoller';
@@ -66,6 +67,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
   private closeExitDialog?: () => void;
   private speaking = false;
   private recording = false;
+  private finishingRecording = false;
 
   private ttsManager!: TTSManager;
 
@@ -90,6 +92,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.timeoutRequest = undefined;
     this.speaking = false;
     this.recording = false;
+    this.finishingRecording = false;
     this.latestResponse = null;
     this.remainingSeconds = 600;
     this.timerStatus = 'running';
@@ -216,7 +219,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     const openSettings = () => {
       if (this.settingsPanel || this.exitDialog || this.ended) return;
       playUiClick(this);
-      this.voiceInput.stop(); this.recording = false;
+      this.voiceInput.stop(); this.recording = false; this.finishingRecording = false;
       this.ttsManager.cancel(); this.micButton.setRecording(false);
       this.settingsPanel = new SettingsPanel(this, () => {
         this.settingsPanel = undefined;
@@ -232,7 +235,12 @@ export class BaseNegotiationScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off('open-settings', openSettings);
     });
-    void this.beginNegotiation();
+    if (this.stage.stageId === 0) {
+      this.micButton.setDisabled(true);
+      showTutorialRules(this, () => { void this.beginNegotiation(); });
+    } else {
+      void this.beginNegotiation();
+    }
   }
 
   /** 서버 세션과 첫 대사를 받은 뒤에만 플레이어 입력을 연다. */
@@ -309,19 +317,28 @@ export class BaseNegotiationScene extends Phaser.Scene {
    * 마이크 버튼 클릭 시 STT 시작
    */
   private startVoiceInput(): void {
+    if (this.settingsPanel || this.exitDialog || this.ended || this.finishingRecording) return;
+    if (this.recording) {
+      this.finishingRecording = true;
+      this.micButton.setWaiting(true);
+      this.micButton.setDisabled(true);
+      this.voiceInput.finish();
+      return;
+    }
     if (!this.sessionId || !this.serverReady || this.speaking || this.recording || this.ended || this.turnBusy || this.pendingTurn || (this.timerStatus !== 'disabled' && this.remainingSeconds <= 0)) return;
     const generation = this.sceneGeneration;
     this.dialogueBox.setSpeaker('player');
     this.dialogueBox.showThinking();
 
     this.micButton.setRecording(true);
-    this.micButton.setDisabled(true);
+    this.micButton.setDisabled(false);
 
     this.recording = true;
     this.voiceInput.start(
       (text) => {
         if (generation !== this.sceneGeneration || this.ended) return;
         this.recording = false;
+        this.finishingRecording = false;
         console.log(
           '플레이어 발화:',
           text
@@ -369,6 +386,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
       (error) => {
         if (generation !== this.sceneGeneration || this.ended) return;
         this.recording = false;
+        this.finishingRecording = false;
         console.error(
           'STT 오류:',
           error
@@ -383,6 +401,15 @@ export class BaseNegotiationScene extends Phaser.Scene {
         this.micButton.setRecording(false);
         this.updateInputState();
         this.micButton.setRetry();
+      },
+      seconds => {
+        if (generation !== this.sceneGeneration || this.ended) return;
+        this.micButton.setRemaining(seconds);
+        if (seconds === 0) {
+          this.finishingRecording = true;
+          this.micButton.setWaiting(true);
+          this.micButton.setDisabled(true);
+        }
       }
     );
   }
@@ -430,6 +457,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
     const generation = this.sceneGeneration;
     const request = this.pendingTurn;
     this.turnBusy = true;
+    this.micButton.setWaiting(true);
     this.retryButton.setVisible(false);
     this.micButton.setDisabled(true);
     this.dialogueBox.setSpeaker('npc');
@@ -489,8 +517,9 @@ export class BaseNegotiationScene extends Phaser.Scene {
   }
 
   private updateInputState(): void {
+    this.micButton.setWaiting(this.finishingRecording || this.turnBusy);
     this.micButton.setDisabled(!!this.settingsPanel || !!this.exitDialog || !this.sessionId || !this.serverReady || this.speaking ||
-      this.recording || this.ended || this.turnBusy || this.pendingTurn !== null || (this.timerStatus !== 'disabled' && this.remainingSeconds <= 0));
+      this.finishingRecording || this.ended || this.turnBusy || this.pendingTurn !== null || (this.timerStatus !== 'disabled' && this.remainingSeconds <= 0));
   }
 
   private startResultPolling(): void {
@@ -532,7 +561,7 @@ export class BaseNegotiationScene extends Phaser.Scene {
 
   private confirmExit(): void {
     if (this.exitDialog || this.settingsPanel) return;
-    this.voiceInput.stop(); this.recording = false;
+    this.voiceInput.stop(); this.recording = false; this.finishingRecording = false;
     this.ttsManager.cancel(); this.micButton.setRecording(false);
     const root = document.createElement('div'); root.className = 'game-settings-overlay';
     const panel = document.createElement('section'); panel.className = 'game-settings-panel';

@@ -1,3 +1,5 @@
+export const VOICE_INPUT_LIMIT_SECONDS = 15;
+
 export function voiceInputErrorMessage(error: unknown): string {
   const code = typeof error === 'object' && error !== null && 'error' in error ? String(error.error) : '';
   const messages: Record<string, string> = {
@@ -39,71 +41,103 @@ export class VoiceInputManager {
     }
   }
 
-  /** 음성 인식 시작 */
-  start(
-    onResult: (text: string) => void,
-    onError?: (e: unknown) => void
-  ): void {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+  private submit?: () => void;
+  private cleanup?: () => void;
 
-    // Web Speech API 미지원
-    if (!SpeechRecognition) {
-      const error = new Error(
-        '이 브라우저는 Speech Recognition을 지원하지 않습니다.'
-      );
-
-      console.error(error);
-      onError?.({ error: 'unsupported' });
-
-      return;
-    }
-
-    // 이미 듣는 중이면 다시 실행하지 않음
-    if (this.isListening) {
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    this.recognition = recognition;
-    // onstart 이전에도 중복 시작을 막는다.
+  /** 사용자가 말 끝내기를 누를 때까지 문장을 모은다. 중간 결과는 화면에 노출하지 않는다. */
+  start(onResult: (text: string) => void, onError?: (e: unknown) => void, onRemaining?: (seconds: number) => void): void {
+    if (this.isListening) return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { onError?.({ error: 'unsupported' }); return; }
     this.isListening = true;
-    recognition.lang = 'ko-KR';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    const finish = (callback: () => void): void => {
-      if (this.recognition !== recognition) return;
-      // 콜백이 재시도를 시작하기 전에 이전 인식과 이벤트를 정리한다.
+    let active = true;
+    let ending = false;
+    let completed = '';
+    let current = '';
+    let deadline = 0;
+    let limitTimer: ReturnType<typeof setTimeout> | undefined;
+    let countdown: ReturnType<typeof setInterval> | undefined;
+    let restartTimer: ReturnType<typeof setTimeout> | undefined;
+    let finishTimer: ReturnType<typeof setTimeout> | undefined;
+    const text = () => [completed, current].filter(Boolean).join(' ').trim();
+    const deliver = () => {
+      if (!active) return;
+      const result = text();
       this.stop();
-      callback();
+      onResult(result);
     };
-
-    recognition.onstart = () => {
-      if (this.recognition === recognition) console.log('STT 시작');
+    const fail = (error: unknown) => {
+      if (!active) return;
+      this.stop();
+      onError?.(error);
     };
-    recognition.onresult = (event: any) => {
-      const text = event.results?.[0]?.[0]?.transcript ?? '';
-      finish(() => onResult(text));
+    this.cleanup = () => {
+      active = false;
+      clearTimeout(restartTimer);
+      clearTimeout(finishTimer);
+      clearTimeout(limitTimer);
+      clearInterval(countdown);
     };
-    recognition.onerror = (event: any) => {
-      finish(() => onError?.(event));
+    const begin = () => {
+      if (!active || ending) return;
+      const recognition = new SpeechRecognition();
+      this.recognition = recognition;
+      current = '';
+      recognition.onstart = () => {
+        if (!active || ending || deadline) return;
+        deadline = Date.now() + VOICE_INPUT_LIMIT_SECONDS * 1000;
+        onRemaining?.(VOICE_INPUT_LIMIT_SECONDS);
+        countdown = setInterval(() => onRemaining?.(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 200);
+        limitTimer = setTimeout(() => this.finish(), VOICE_INPUT_LIMIT_SECONDS * 1000);
+      };
+      recognition.lang = 'ko-KR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.onresult = (event: any) => {
+        if (!active || this.recognition !== recognition) return;
+        // 전체 결과 목록을 다시 조합해 같은 문장이 중복 누적되지 않게 한다.
+        current = Array.from(event.results as ArrayLike<any>)
+          .map((result: any) => result[0]?.transcript ?? '').join(' ').trim();
+      };
+      recognition.onerror = (event: any) => {
+        if (!active || this.recognition !== recognition) return;
+        // 침묵으로 끝나면 onend에서 재시작한다.
+        if (event.error === 'no-speech') return;
+        fail(event);
+      };
+      recognition.onend = () => {
+        if (!active || this.recognition !== recognition) return;
+        this.recognition = null;
+        completed = text();
+        current = '';
+        if (ending) deliver();
+        else restartTimer = setTimeout(begin, 250);
+      };
+      try { recognition.start(); } catch (error) { fail(error); }
     };
-    recognition.onend = () => {
-      // 결과/오류 없이 종료돼도 화면의 빈 발화 복구 처리를 실행한다.
-      finish(() => onResult(''));
+    this.submit = () => {
+      if (!active || ending) return;
+      ending = true;
+      clearTimeout(limitTimer);
+      clearInterval(countdown);
+      onRemaining?.(0);
+      clearTimeout(restartTimer);
+      if (!this.recognition) { deliver(); return; }
+      // stop은 마지막 인식 결과를 받은 후 onend를 발생시킨다.
+      finishTimer = setTimeout(deliver, 3000);
+      try { this.recognition.stop(); } catch { deliver(); }
     };
-
-    try {
-      recognition.start();
-    } catch (error) {
-      finish(() => onError?.(error));
-    }
+    begin();
   }
 
-  /** 화면 이탈 시에는 결과 콜백 없이 녹음과 뒤늦은 이벤트를 취소한다. */
+  /** 마지막 인식 결과를 받은 뒤 한 번만 전송한다. */
+  finish(): void { this.submit?.(); }
+
+  /** 화면 이탈이나 설정 열기에서는 발화를 전송하지 않고 취소한다. */
   stop(): void {
+    this.cleanup?.();
+    this.cleanup = undefined;
+    this.submit = undefined;
     const recognition = this.recognition;
     this.recognition = null;
     this.isListening = false;
@@ -112,10 +146,6 @@ export class VoiceInputManager {
     recognition.onresult = null;
     recognition.onerror = null;
     recognition.onend = null;
-    try {
-      recognition.abort();
-    } catch {
-      // 이미 종료된 브라우저 인식기는 추가 취소가 필요 없다.
-    }
+    try { recognition.abort(); } catch { /* 이미 종료됨 */ }
   }
 }

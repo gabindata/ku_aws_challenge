@@ -134,6 +134,36 @@ async function persona(): Promise<void> {
     ok(`스테이지 ${stage.stageId} 마무리 대사가 프롬프트에`, system.includes(p.closing!.nearLimit));
   }
 
+  // 성공으로 끝나는 턴의 대사가 이어질 말이면 결과 화면이 뚝 끊긴 것처럼 보인다
+  for (const stage of loadAllStages()) {
+    const system = buildJudgeSystem(stage);
+    ok(`스테이지 ${stage.stageId} 마무리 지시가 프롬프트에`, system.includes('대화를 닫는 대사'));
+    ok(`  새로 묻지 말라고 지시`, system.includes('새로 묻지 않는다'));
+    ok(`  성공 선언은 막음`, system.includes('성공했다고 선언하지 않는다'));
+    const onSuccess = stage.persona?.closing?.onSuccess;
+    if (onSuccess) {
+      ok(`  스테이지 ${stage.stageId} 지정 마무리 대사가 프롬프트에`, system.includes(onSuccess));
+    }
+  }
+  ok('튜토리얼에 기획 지정 마무리 대사',
+    getStage(0)!.persona?.closing?.onSuccess === '딱 일주일이야. 이번에는 연락 피하지 말고.');
+
+  // 욕설은 대상을 가리지 않고 치명적 행동이다. 짜증 표현은 아니다
+  const rules = buildJudgeSystem(getStage(3)!);
+  ok('욕설은 대상을 안 가림', rules.includes('누구를 향했는지 가리지 않는다'));
+  ok('  혼잣말 욕설도 포함', rules.includes('혼잣말이나 감탄으로 내뱉은'));
+  ok('  내치는 말도 포함', rules.includes('상대를 쫓아내는 말'));
+  ok('  낮잡는 호칭도 포함', rules.includes('상대를 낮잡는 호칭이나 인격 비하'));
+  ok('  거절은 제외', rules.includes('요구를 거절함'));
+  ok('  짜증은 제외', rules.includes('짜증이나 답답함'));
+  ok('  대화 종료 의사는 제외', rules.includes('대화를 끝내자는 뜻'));
+  ok('  구분 기준을 제시', rules.includes('상대를 물리치려 하는가'));
+  ok('  거친 말투만으로는 아님', rules.includes('말투가 거칠다는 이유만으로'));
+
+  // 튜토리얼만 되돌리고 나머지는 바로 실패다
+  ok('튜토리얼만 fatalRecovery', loadAllStages()
+    .filter((st) => st.fatalRecovery === true).map((st) => st.stageId).join() === '0');
+
   // 페르소나는 대사용이다. 브라우저로 나가면 안 된다.
   const s = await startNegotiation({ stageId: 1, requestId: id('r'), worldState: [] });
   if (!s.ok) return ok('페르소나 시나리오 시작', false);

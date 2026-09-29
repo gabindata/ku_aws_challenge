@@ -83,6 +83,13 @@ export interface StageClosingLines {
   finalCall?: string;
   /** 40회 시점을 필수 키 충족 여부로 나누는 스테이지 (스테이지 2) */
   finalCallByOutcome?: { met: string; unmet: string };
+  /**
+   * 이번 발화로 필수 합의가 모두 채워져 대화가 끝날 때의 대사.
+   *
+   * 없으면 판정 모델이 페르소나에 맞춰 직접 짓는다. 기획이 지정한 문장이 있는
+   * 스테이지만 여기에 적는다.
+   */
+  onSuccess?: string;
 }
 
 export interface StageDefinition {

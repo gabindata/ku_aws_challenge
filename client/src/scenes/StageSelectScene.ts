@@ -249,7 +249,7 @@ export class StageSelectScene extends Phaser.Scene {
     const sx = width / SOURCE_MAP_WIDTH;
     const sy = height / SOURCE_MAP_HEIGHT;
     this.add.image(1308 * sx, 344 * sy, 'landlord-2d')
-      .setDisplaySize(82 * sx, 82 * sy).setDepth(2);
+      .setDisplaySize(this.player.displayWidth, this.player.displayHeight).setDepth(2);
     this.player.setDepth(3);
 
     // =========================
